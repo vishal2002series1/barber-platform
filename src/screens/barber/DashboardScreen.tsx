@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, ScrollView, Alert, RefreshControl } from 'react-native';
+import { View, StyleSheet, ScrollView, Alert, RefreshControl, TouchableOpacity } from 'react-native';
 import { Text, Card, Button, Switch, ActivityIndicator, Chip, Avatar } from 'react-native-paper';
 import { supabase } from '../../services/supabase';
 import { useAuth } from '../../auth/AuthContext';
 import { Colors } from '../../config/colors';
 import { Strings } from '../../config/strings';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 export default function DashboardScreen() {
-  const { userProfile } = useAuth();
+  const { userProfile, signOut } = useAuth(); // Added signOut
   const [isOnline, setIsOnline] = useState(true);
   const [requests, setRequests] = useState<any[]>([]);
   const [stats, setStats] = useState({ todayEarnings: 0, jobsDone: 0 });
@@ -35,13 +36,13 @@ export default function DashboardScreen() {
     // Get Pending Requests
     const { data: pending } = await supabase
       .from('bookings')
-      .select('*, profiles:customer_id(full_name)') // Join to get customer name
+      .select('*, profiles:customer_id(full_name)')
       .eq('barber_id', userProfile!.id)
       .eq('status', 'requested');
     
     if (pending) setRequests(pending);
 
-    // Get Stats (Simple sum for today)
+    // Get Stats
     const today = new Date().toISOString().split('T')[0];
     const { data: earnings } = await supabase
       .rpc('get_barber_stats', { 
@@ -55,7 +56,7 @@ export default function DashboardScreen() {
     setLoading(false);
   };
 
-  // 2. Real-Time Listener (The Magic)
+  // 2. Real-Time Listener
   const subscribeToBookings = () => {
     const channel = supabase
       .channel('barber-dashboard')
@@ -68,9 +69,8 @@ export default function DashboardScreen() {
           filter: `barber_id=eq.${userProfile!.id}`
         },
         (payload) => {
-          // When a new row is inserted, add it to our list
           Alert.alert(Strings.newRequest, "Check your queue!");
-          fetchDashboardData(); // Refresh data to be safe
+          fetchDashboardData();
         }
       )
       .subscribe();
@@ -93,9 +93,8 @@ export default function DashboardScreen() {
 
     if (error) Alert.alert("Error", error.message);
     else {
-      // Remove from local list instantly for snappy feel
       setRequests(prev => prev.filter(r => r.id !== bookingId));
-      fetchDashboardData(); // Refresh stats
+      fetchDashboardData();
     }
   };
 
@@ -104,13 +103,18 @@ export default function DashboardScreen() {
       style={styles.container} 
       refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchDashboardData} />}
     >
-      {/* HEADER: STATUS TOGGLE */}
+      {/* HEADER: STATUS TOGGLE & LOGOUT */}
       <View style={[styles.header, { backgroundColor: isOnline ? Colors.success : Colors.textSecondary }]}>
         <View>
           <Text style={styles.headerTitle}>{isOnline ? Strings.goOnline : Strings.goOffline}</Text>
           <Text style={styles.headerSubtitle}>{userProfile?.full_name}'s Shop</Text>
         </View>
-        <Switch value={isOnline} onValueChange={toggleOnline} color="white" />
+        <View style={{flexDirection: 'row', alignItems: 'center'}}>
+            <Switch value={isOnline} onValueChange={toggleOnline} color="white" style={{marginRight: 15}} />
+            <TouchableOpacity onPress={signOut}>
+                <MaterialCommunityIcons name="logout" size={24} color="white" />
+            </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.content}>

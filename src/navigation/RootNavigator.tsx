@@ -6,6 +6,9 @@ import { ActivityIndicator, View, Text } from 'react-native';
 import DashboardScreen from '../screens/barber/DashboardScreen';
 import ServicesScreen from '../screens/barber/ServicesScreen';
 import { MaterialCommunityIcons } from '@expo/vector-icons'; // For nice tab icons
+import ExploreScreen from '../screens/customer/ExploreScreen';
+import BookingScreen from '../screens/customer/BookingScreen';
+import MyBookingsScreen from '../screens/customer/MyBookingsScreen';
 
 // Import Screens
 import LoginScreen from '../screens/auth/LoginScreen';
@@ -32,19 +35,23 @@ export default function RootNavigator() {
 
   return (
     <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {!session ? (
-          // AUTH STACK
-          <Stack.Screen name="Login" component={LoginScreen} />
-        ) : isBarber ? (
-          // BARBER STACK
-          <Stack.Screen name="BarberApp" component={BarberTabs} />
-        ) : (
-          // CUSTOMER STACK
-          <Stack.Screen name="CustomerApp" component={CustomerTabs} />
-        )}
-      </Stack.Navigator>
-    </NavigationContainer>
+  <Stack.Navigator screenOptions={{ headerShown: false }}>
+    {!session ? (
+      // AUTH STACK
+      <Stack.Screen name="Login" component={LoginScreen} />
+    ) : isBarber ? (
+      // BARBER STACK
+      <Stack.Screen name="BarberApp" component={BarberTabs} />
+    ) : (
+      // CUSTOMER STACK
+      <>
+        <Stack.Screen name="CustomerApp" component={CustomerTabs} />
+        {/* Add this line so we can navigate to Booking from Explore */}
+        <Stack.Screen name="Booking" component={BookingScreen} options={{ presentation: 'modal' }} />
+      </>
+    )}
+  </Stack.Navigator>
+</NavigationContainer>
   );
 }
 
@@ -77,12 +84,19 @@ function BarberTabs() {
     );
   }
 
-function CustomerTabs() {
-  return (
-    <Tab.Navigator screenOptions={{ tabBarActiveTintColor: Colors.primary }}>
-      <Tab.Screen name="Explore" component={CustomerHome} />
-      <Tab.Screen name="MyBookings" component={CustomerHome} />
-      <Tab.Screen name="Profile" component={CustomerHome} />
-    </Tab.Navigator>
-  );
-}
+  function CustomerTabs() {
+    return (
+      <Tab.Navigator screenOptions={{ tabBarActiveTintColor: Colors.primary, headerShown: false }}>
+        <Tab.Screen 
+          name="Explore" 
+          component={ExploreScreen} 
+          options={{ tabBarIcon: ({ color }) => <MaterialCommunityIcons name="compass" size={24} color={color} /> }}
+        />
+        <Tab.Screen 
+           name="MyBookings" 
+           component={MyBookingsScreen} // <--- UPDATED THIS LINE
+           options={{ tabBarIcon: ({ color }) => <MaterialCommunityIcons name="calendar-check" size={24} color={color} /> }}
+        />
+      </Tab.Navigator>
+    );
+  }

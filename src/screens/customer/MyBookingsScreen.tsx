@@ -1,0 +1,97 @@
+import React, { useEffect, useState } from 'react';
+import { View, StyleSheet, FlatList, RefreshControl } from 'react-native';
+import { Text, Card, Chip, ActivityIndicator, Button } from 'react-native-paper';
+import { supabase } from '../../services/supabase';
+import { useAuth } from '../../auth/AuthContext';
+import { Colors } from '../../config/colors';
+import { useFocusEffect } from '@react-navigation/native';
+
+export default function MyBookingsScreen() {
+  const { userProfile } = useAuth();
+  const [bookings, setBookings] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // useFocusEffect ensures the list refreshes every time you switch to this tab
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchBookings();
+    }, [])
+  );
+
+  const fetchBookings = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('bookings')
+      .select(`
+        id,
+        slot_start,
+        status,
+        price,
+        shops ( shop_name )
+      `)
+      .eq('customer_id', userProfile?.id)
+      .order('slot_start', { ascending: false });
+
+    if (data) setBookings(data);
+    setLoading(false);
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'accepted': return Colors.success;
+      case 'rejected': return Colors.error;
+      case 'requested': return '#F59E0B'; // Orange
+      default: return Colors.textSecondary;
+    }
+  };
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.title}>My Bookings</Text>
+      </View>
+
+      {loading ? (
+        <ActivityIndicator style={{ marginTop: 20 }} />
+      ) : bookings.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Text>No bookings yet.</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={bookings}
+          keyExtractor={(item) => item.id}
+          refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchBookings} />}
+          contentContainerStyle={{ padding: 16 }}
+          renderItem={({ item }) => (
+            <Card style={styles.card}>
+              <Card.Title
+                title={item.shops?.shop_name || "Barber Shop"}
+                subtitle={new Date(item.slot_start).toLocaleString()}
+                right={(props) => (
+                  <Chip 
+                    textStyle={{ color: 'white', fontWeight: 'bold', fontSize: 12 }} 
+                    style={{ backgroundColor: getStatusColor(item.status), marginRight: 16 }}
+                  >
+                    {item.status.toUpperCase()}
+                  </Chip>
+                )}
+              />
+              <Card.Content>
+                 <Text style={{fontWeight: 'bold', marginTop: 5}}>Amount: ${item.price}</Text>
+              </Card.Content>
+            </Card>
+          )}
+        />
+      )}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: Colors.background },
+  header: { padding: 20, paddingTop: 60, backgroundColor: 'white', borderBottomWidth: 1, borderBottomColor: '#eee' },
+  title: { fontSize: 24, fontWeight: 'bold' },
+  card: { marginBottom: 12, backgroundColor: 'white' },
+  emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center' }
+});
