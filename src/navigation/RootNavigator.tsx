@@ -9,6 +9,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons'; // For nice tab ico
 import ExploreScreen from '../screens/customer/ExploreScreen';
 import BookingScreen from '../screens/customer/BookingScreen';
 import MyBookingsScreen from '../screens/customer/MyBookingsScreen';
+import ProfileScreen from '../screens/common/ProfileScreen';
 
 // Import Screens
 import LoginScreen from '../screens/auth/LoginScreen';
@@ -79,6 +80,11 @@ function BarberTabs() {
             tabBarIcon: ({ color }) => <MaterialCommunityIcons name="content-cut" size={24} color={color} />
           }}
         />
+        <Tab.Screen 
+          name="Profile" 
+          component={ProfileScreen} 
+          options={{ tabBarIcon: ({ color }) => <MaterialCommunityIcons name="account" size={24} color={color} /> }}
+        />
         {/* We will build ScheduleScreen later, keeping placeholder for now if you want */}
       </Tab.Navigator>
     );
@@ -96,6 +102,11 @@ function BarberTabs() {
            name="MyBookings" 
            component={MyBookingsScreen} // <--- UPDATED THIS LINE
            options={{ tabBarIcon: ({ color }) => <MaterialCommunityIcons name="calendar-check" size={24} color={color} /> }}
+        />
+        <Tab.Screen 
+          name="Profile" 
+          component={ProfileScreen} 
+          options={{ tabBarIcon: ({ color }) => <MaterialCommunityIcons name="account" size={24} color={color} /> }}
         />
       </Tab.Navigator>
     );
