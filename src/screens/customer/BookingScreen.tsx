@@ -1,50 +1,81 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, FlatList, Alert, TouchableOpacity, Platform } from 'react-native';
-import { Text, Button, Checkbox, ActivityIndicator, IconButton } from 'react-native-paper';
+import { View, StyleSheet, FlatList, Alert, TouchableOpacity, Image, Platform, ScrollView } from 'react-native';
+import { Text, Button, Checkbox, ActivityIndicator, IconButton, Card, Divider, Chip } from 'react-native-paper';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { supabase } from '../../services/supabase';
 import { Colors } from '../../config/colors';
-// import { View, StyleSheet, FlatList, Alert, TouchableOpacity } from 'react-native';
 
 export default function BookingScreen() {
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
   const { shopId, shopName } = route.params;
 
+  // Data State
+  const [shopDetails, setShopDetails] = useState<any>(null);
   const [services, setServices] = useState<any[]>([]);
-  const [selectedServices, setSelectedServices] = useState<string[]>([]);
-  
-  // Slot State
   const [slots, setSlots] = useState<any[]>([]);
+  
+  // Selection State
+  const [selectedServices, setSelectedServices] = useState<string[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]); // Default to today
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]); // Today
   
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    fetchData();
-  }, [shopId, selectedDate]);
+    fetchShopData();
+  }, [shopId]);
 
-  const fetchData = async () => {
+  useEffect(() => {
+    if (shopDetails?.owner_id) {
+        fetchSchedule();
+    }
+  }, [shopDetails, selectedDate]);
+
+  const fetchShopData = async () => {
     setLoading(true);
     
-    // 1. Fetch Services
-    const { data: menu } = await supabase.from('services').select('*').eq('shop_id', shopId);
-    if (menu) setServices(menu);
-
-    // 2. Fetch Barber ID (Needed for schedule)
-    const { data: shop } = await supabase.from('shops').select('owner_id').eq('id', shopId).single();
+    // 1. Get Shop Details (Image, Location, Owner)
+    const { data: shop } = await supabase
+        .from('shops')
+        .select('owner_id, image_url, latitude, longitude, is_open')
+        .eq('id', shopId)
+        .single();
     
-    if (shop) {
-        // 3. Fetch Slots using our RPC function
-        const { data: schedule } = await supabase.rpc('get_barber_schedule', {
-            p_barber_id: shop.owner_id,
-            p_date: selectedDate
-        });
-        if (schedule) setSlots(schedule);
-    }
+    if (shop) setShopDetails(shop);
+
+    // 2. Get Services (Rate Card)
+    const { data: menu } = await supabase
+        .from('services')
+        .select('*')
+        .eq('shop_id', shopId);
+    
+    if (menu) setServices(menu);
     setLoading(false);
+  };
+
+  const fetchSchedule = async () => {
+    // 3. Get Slots
+    const { data: schedule } = await supabase.rpc('get_barber_schedule', {
+        p_barber_id: shopDetails.owner_id,
+        p_date: selectedDate
+    });
+
+    if (schedule) {
+        // --- SMART FILTERING ---
+        // Filter out slots that are in the past (if the selected date is Today)
+        const now = new Date();
+        const filtered = schedule.filter((slot: any) => {
+            const slotTime = new Date(slot.slot_time);
+            // If slot is today, ensure it's in the future. If different day, show all.
+            if (new Date(selectedDate).toDateString() === now.toDateString()) {
+                return slotTime > now;
+            }
+            return true;
+        });
+        setSlots(filtered);
+    }
   };
 
   const toggleService = (id: string) => {
@@ -54,8 +85,6 @@ export default function BookingScreen() {
       setSelectedServices(prev => [...prev, id]);
     }
   };
-
-  // ... imports ...
 
   const confirmBooking = async () => {
     if (selectedServices.length === 0) {
@@ -69,10 +98,8 @@ export default function BookingScreen() {
 
     setSubmitting(true);
 
-    const { data: shop } = await supabase.from('shops').select('owner_id').eq('id', shopId).single();
-
     const { error } = await supabase.rpc('request_booking_v2', {
-        p_barber_id: shop.owner_id,
+        p_barber_id: shopDetails.owner_id,
         p_shop_id: shopId,
         p_slot_start: selectedSlot,
         p_service_ids: selectedServices,
@@ -84,47 +111,48 @@ export default function BookingScreen() {
     if (error) {
         Alert.alert("Booking Failed", error.message);
     } else {
-        // --- FIXED NAVIGATION LOGIC ---
-        const goHome = () => {
-            // 1. Force the navigation to the main Customer Stack
-            // 2. Then specify the specific Tab we want
-            navigation.navigate('CustomerApp', { 
-              screen: 'MyBookings' 
-            });
-        };
-
+        const goHome = () => navigation.navigate('CustomerApp', { screen: 'MyBookings' });
+        
         if (Platform.OS === 'web') {
-            // Web Alert (Blocking)
             alert("Success: Booking sent to barber!");
             goHome();
         } else {
-            // Mobile Alert
-            Alert.alert("Success", "Booking sent to barber!", [
-                { text: "OK", onPress: goHome }
-            ]);
+            Alert.alert("Success", "Booking sent to barber!", [{ text: "OK", onPress: goHome }]);
         }
     }
   };
 
+  if (loading) return <ActivityIndicator style={{marginTop: 50}} />;
+
   return (
     <View style={styles.container}>
-      {/* HEADER WITH BACK BUTTON */}
-      <View style={styles.header}>
-        <IconButton icon="close" size={24} onPress={() => navigation.goBack()} />
-        <View>
-            <Text style={styles.shopTitle}>{shopName}</Text>
-            <Text style={styles.subtitle}>New Appointment</Text>
-        </View>
+      {/* --- HEADER IMAGE --- */}
+      <View style={styles.imageContainer}>
+          <Image 
+            source={{ uri: shopDetails?.image_url || 'https://placehold.co/600x400/1A1A1A/FFF?text=Barber+Shop' }} 
+            style={styles.headerImage} 
+          />
+          <IconButton icon="arrow-left" iconColor="white" style={styles.backBtn} onPress={() => navigation.goBack()} />
+          <View style={styles.imageOverlay}>
+              <Text style={styles.shopTitle}>{shopName}</Text>
+              <View style={styles.badgeRow}>
+                  <Chip icon="map-marker" textStyle={{fontSize: 12}} style={{marginRight: 8}}>
+                    {shopDetails?.latitude ? `${shopDetails.latitude.toFixed(3)}, ${shopDetails.longitude.toFixed(3)}` : "Location N/A"}
+                  </Chip>
+                  <Chip icon="clock" textStyle={{fontSize: 12}}>
+                    {shopDetails?.is_open ? "Open Now" : "Closed"}
+                  </Chip>
+              </View>
+          </View>
       </View>
 
-      {loading ? <ActivityIndicator style={{marginTop: 50}} /> : (
-        <FlatList
-          ListHeaderComponent={
-            <>
-              {/* SERVICE SECTION */}
-              <Text style={styles.sectionTitle}>1. Select Services</Text>
-              {services.map((item) => (
-                 <TouchableOpacity key={item.id} onPress={() => toggleService(item.id)} style={styles.serviceRow}>
+      <ScrollView contentContainerStyle={{paddingBottom: 100}}>
+        
+        {/* --- RATE CARD (SERVICES) --- */}
+        <View style={styles.section}>
+            <Text style={styles.sectionHeader}>Select Services</Text>
+            {services.map((item) => (
+                <TouchableOpacity key={item.id} onPress={() => toggleService(item.id)} style={styles.serviceRow}>
                     <View style={{flex: 1}}>
                         <Text style={styles.serviceName}>{item.name}</Text>
                         <Text style={styles.servicePrice}>${item.price} • {item.duration_min} mins</Text>
@@ -134,50 +162,54 @@ export default function BookingScreen() {
                         onPress={() => toggleService(item.id)}
                         color={Colors.primary}
                     />
-                 </TouchableOpacity>
-              ))}
+                </TouchableOpacity>
+            ))}
+        </View>
 
-              <View style={styles.divider} />
+        <Divider style={{height: 6, backgroundColor: '#f4f4f4'}} />
 
-              {/* SLOT SECTION */}
-              <Text style={styles.sectionTitle}>2. Select Time ({selectedDate})</Text>
-              <View style={styles.slotsGrid}>
-                {slots.map((slot, index) => {
-                    const timeLabel = new Date(slot.slot_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-                    const isAvailable = slot.status === 'free';
-                    const isSelected = selectedSlot === slot.slot_time;
-                    
-                    return (
-                        <TouchableOpacity
-                            key={index}
-                            disabled={!isAvailable}
-                            onPress={() => setSelectedSlot(slot.slot_time)}
-                            style={[
-                                styles.slotBadge,
-                                isSelected && styles.slotSelected,
-                                !isAvailable && styles.slotBusy
-                            ]}
-                        >
-                            <Text style={[
-                                styles.slotText, 
-                                isSelected && {color: 'white'},
-                                !isAvailable && {color: '#ccc'}
-                            ]}>
-                                {timeLabel}
-                            </Text>
-                        </TouchableOpacity>
-                    );
-                })}
-              </View>
-            </>
-          }
-          data={[]} // Empty data because we render everything in Header for simplicity
-          renderItem={null}
-          contentContainerStyle={{paddingBottom: 100}}
-        />
-      )}
+        {/* --- TIME SLOTS --- */}
+        <View style={styles.section}>
+            <Text style={styles.sectionHeader}>Select Time ({selectedDate})</Text>
+            {slots.length === 0 ? (
+                <Text style={{color: 'gray', fontStyle: 'italic', marginTop: 10}}>
+                    No available slots for the rest of the day.
+                </Text>
+            ) : (
+                <View style={styles.slotsGrid}>
+                    {slots.map((slot: any, index: number) => {
+                        const timeLabel = new Date(slot.slot_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                        const isAvailable = slot.status === 'free';
+                        const isSelected = selectedSlot === slot.slot_time;
+                        
+                        return (
+                            <TouchableOpacity
+                                key={index}
+                                disabled={!isAvailable}
+                                onPress={() => setSelectedSlot(slot.slot_time)}
+                                style={[
+                                    styles.slotBadge,
+                                    isSelected && styles.slotSelected,
+                                    !isAvailable && styles.slotBusy
+                                ]}
+                            >
+                                <Text style={[
+                                    styles.slotText, 
+                                    isSelected && {color: 'white'},
+                                    !isAvailable && {color: '#ccc'}
+                                ]}>
+                                    {timeLabel}
+                                </Text>
+                            </TouchableOpacity>
+                        );
+                    })}
+                </View>
+            )}
+        </View>
 
-      {/* FOOTER BUTTON */}
+      </ScrollView>
+
+      {/* --- FOOTER --- */}
       <View style={styles.footer}>
         <Button 
             mode="contained" 
@@ -186,7 +218,7 @@ export default function BookingScreen() {
             buttonColor={Colors.primary}
             contentStyle={{height: 50}}
         >
-            Confirm Booking
+            Confirm & Book
         </Button>
       </View>
     </View>
@@ -195,18 +227,32 @@ export default function BookingScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: 'white' },
-  header: { padding: 10, paddingTop: 50, backgroundColor: '#F9FAFB', flexDirection: 'row', alignItems: 'center' },
-  shopTitle: { fontSize: 20, fontWeight: 'bold' },
-  subtitle: { color: 'gray', fontSize: 12 },
   
-  sectionTitle: { fontSize: 18, fontWeight: 'bold', margin: 16, marginBottom: 8 },
-  serviceRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
+  // Header Styles
+  imageContainer: { height: 250, width: '100%', position: 'relative' },
+  headerImage: { width: '100%', height: '100%' },
+  backBtn: { position: 'absolute', top: 40, left: 10, backgroundColor: 'rgba(0,0,0,0.3)' },
+  imageOverlay: { 
+      position: 'absolute', bottom: 0, left: 0, right: 0, 
+      padding: 20, 
+      backgroundColor: 'rgba(0,0,0,0.6)' 
+  },
+  shopTitle: { color: 'white', fontSize: 24, fontWeight: 'bold', marginBottom: 8 },
+  badgeRow: { flexDirection: 'row' },
+
+  // Content Styles
+  section: { padding: 20 },
+  sectionHeader: { fontSize: 18, fontWeight: 'bold', marginBottom: 15 },
+  
+  serviceRow: { 
+      flexDirection: 'row', alignItems: 'center', 
+      paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' 
+  },
   serviceName: { fontSize: 16, fontWeight: '500' },
   servicePrice: { color: 'gray', marginTop: 2 },
   
-  divider: { height: 8, backgroundColor: '#F3F4F6', marginVertical: 10 },
-  
-  slotsGrid: { flexDirection: 'row', flexWrap: 'wrap', padding: 10 },
+  // Slots
+  slotsGrid: { flexDirection: 'row', flexWrap: 'wrap' },
   slotBadge: { 
     width: '30%', margin: '1.5%', paddingVertical: 10, 
     borderWidth: 1, borderColor: '#ddd', borderRadius: 8, 
@@ -214,7 +260,10 @@ const styles = StyleSheet.create({
   },
   slotSelected: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   slotBusy: { backgroundColor: '#F3F4F6', borderColor: '#eee' },
-  slotText: { fontWeight: '600' },
+  slotText: { fontWeight: '600', fontSize: 13 },
 
-  footer: { padding: 20, borderTopWidth: 1, borderTopColor: '#eee', position: 'absolute', bottom: 0, width: '100%', backgroundColor: 'white' },
+  footer: { 
+      padding: 20, borderTopWidth: 1, borderTopColor: '#eee', 
+      position: 'absolute', bottom: 0, width: '100%', backgroundColor: 'white' 
+  },
 });

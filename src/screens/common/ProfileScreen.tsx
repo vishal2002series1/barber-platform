@@ -6,11 +6,13 @@ import { useAuth } from '../../auth/AuthContext';
 import { Colors } from '../../config/colors';
 import * as ImagePicker from 'expo-image-picker';
 import { uploadImage } from '../../services/storage';
+import * as Location from 'expo-location';
 
 export default function ProfileScreen() {
   const { userProfile, signOut, isBarber } = useAuth();
   
   const [loading, setLoading] = useState(false);
+  const [location, setLocation] = useState<{lat: number, long: number} | null>(null);
   
   // Form State
   const [fullName, setFullName] = useState('');
@@ -29,6 +31,7 @@ export default function ProfileScreen() {
     if (!userProfile) return;
     setFullName(userProfile.full_name || '');
     setPhone(userProfile.phone || '');
+    // PRESERVED LINE
     setAvatarUrl(userProfile?.avatar_url ?? null);
 
     if (isBarber) {
@@ -40,13 +43,19 @@ export default function ProfileScreen() {
         
       if (shop) {
         setShopName(shop.shop_name);
-        setShopImage(shop.image_url); // <--- Now correctly loading from DB
+        setShopImage(shop.image_url); 
+
+        // Load existing location
+        if (shop.latitude && shop.longitude) {
+            setLocation({ lat: shop.latitude, long: shop.longitude });
+        }
       }
     }
   };
 
   const pickImage = async (type: 'avatar' | 'shop') => {
     const result = await ImagePicker.launchImageLibraryAsync({
+      // PRESERVED LINE
       mediaTypes: ['images'],
       allowsEditing: true,
       aspect: type === 'avatar' ? [1, 1] : [16, 9], 
@@ -58,7 +67,6 @@ export default function ProfileScreen() {
       try {
         const publicUrl = await uploadImage(result.assets[0].uri);
         
-        // FIX: We ONLY update local state here. We DO NOT save to DB yet.
         if (type === 'avatar') {
             setAvatarUrl(publicUrl);
         } else {
@@ -79,7 +87,7 @@ export default function ProfileScreen() {
     const { error: profileError } = await supabase.from('profiles').update({
         full_name: fullName,
         phone: phone,
-        avatar_url: avatarUrl // <--- Saving Avatar here now
+        avatar_url: avatarUrl 
     }).eq('id', userProfile?.id);
 
     if (profileError) {
@@ -92,7 +100,7 @@ export default function ProfileScreen() {
     if (isBarber) {
         const { error: shopError } = await supabase.from('shops').update({ 
             shop_name: shopName,
-            image_url: shopImage // <--- Saving Banner here now
+            image_url: shopImage 
         }).eq('owner_id', userProfile?.id);
 
         if (shopError) {
@@ -104,6 +112,37 @@ export default function ProfileScreen() {
 
     setLoading(false);
     Alert.alert("Success", "Profile updated successfully!");
+  };
+
+  const handleUpdateLocation = async () => {
+    setLoading(true);
+    try {
+        // 1. Ask Permission
+        let { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+            Alert.alert("Permission Denied", "Allow location access to set your shop address.");
+            setLoading(false);
+            return;
+        }
+
+        // 2. Get Location
+        let loc = await Location.getCurrentPositionAsync({});
+        setLocation({ lat: loc.coords.latitude, long: loc.coords.longitude });
+
+        // 3. Save to DB immediately
+        const { error } = await supabase.from('shops').update({
+            latitude: loc.coords.latitude,
+            longitude: loc.coords.longitude
+        }).eq('owner_id', userProfile?.id);
+
+        if (error) throw error;
+        Alert.alert("Success", "Shop location updated to your current position!");
+
+    } catch (error: any) {
+        Alert.alert("Error", error.message);
+    } finally {
+        setLoading(false);
+    }
   };
 
   return (
@@ -144,6 +183,17 @@ export default function ProfileScreen() {
                         </View>
                     )}
                 </TouchableOpacity>
+
+                {/* --- NEW LOCATION SECTION --- */}
+                <Text style={{marginBottom: 5, color: 'gray', marginTop: 15}}>Shop Location</Text>
+                <View style={styles.locationContainer}>
+                    <Text style={{flex: 1, color: Colors.text}}>
+                        {location ? `Lat: ${location.lat.toFixed(4)}, Long: ${location.long.toFixed(4)}` : "No location set"}
+                    </Text>
+                    <Button mode="outlined" onPress={handleUpdateLocation} loading={loading}>
+                        📍 Update
+                    </Button>
+                </View>
             </>
         )}
 
@@ -170,5 +220,10 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 18, fontWeight: 'bold', marginTop: 10, marginBottom: 10 },
   shopBannerBtn: { height: 150, borderRadius: 10, overflow: 'hidden', marginBottom: 10, borderWidth: 1, borderColor: '#eee' },
   shopBanner: { width: '100%', height: '100%' },
-  shopBannerPlaceholder: { width: '100%', height: '100%', backgroundColor: '#f0f0f0', justifyContent: 'center', alignItems: 'center' }
+  shopBannerPlaceholder: { width: '100%', height: '100%', backgroundColor: '#f0f0f0', justifyContent: 'center', alignItems: 'center' },
+  // ADDED STYLE FOR LOCATION
+  locationContainer: { 
+    flexDirection: 'row', alignItems: 'center', marginBottom: 20, 
+    padding: 10, backgroundColor: '#f9f9f9', borderRadius: 8, borderWidth: 1, borderColor: '#eee' 
+  }
 });

@@ -10,6 +10,7 @@ import ExploreScreen from '../screens/customer/ExploreScreen';
 import BookingScreen from '../screens/customer/BookingScreen';
 import MyBookingsScreen from '../screens/customer/MyBookingsScreen';
 import ProfileScreen from '../screens/common/ProfileScreen';
+import ScheduleScreen from '../screens/barber/ScheduleScreen';
 
 // Import Screens
 import LoginScreen from '../screens/auth/LoginScreen';
@@ -71,6 +72,13 @@ function BarberTabs() {
           component={DashboardScreen} 
           options={{
             tabBarIcon: ({ color }) => <MaterialCommunityIcons name="view-dashboard" size={24} color={color} />
+          }}
+        />
+        <Tab.Screen 
+          name="Schedule" 
+          component={ScheduleScreen} 
+          options={{
+            tabBarIcon: ({ color }) => <MaterialCommunityIcons name="calendar-clock" size={24} color={color} />
           }}
         />
         <Tab.Screen 
