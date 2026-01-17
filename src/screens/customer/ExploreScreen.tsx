@@ -4,9 +4,13 @@ import { Text, Card, Searchbar, ActivityIndicator, Chip } from 'react-native-pap
 import { supabase } from '../../services/supabase';
 import { Colors } from '../../config/colors';
 import { useNavigation } from '@react-navigation/native';
+// 1. Add Imports for Auth and Icons
+import { useAuth } from '../../auth/AuthContext';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 export default function ExploreScreen() {
   const navigation = useNavigation<any>();
+  const { signOut } = useAuth(); // 2. Get signOut function
   const [shops, setShops] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -16,8 +20,6 @@ export default function ExploreScreen() {
   }, []);
 
   const fetchShops = async () => {
-    // In a real app, we would use PostGIS for "Near Me". 
-    // For now, we fetch all shops.
     const { data, error } = await supabase
       .from('shops')
       .select(`
@@ -32,14 +34,23 @@ export default function ExploreScreen() {
   };
 
   const handleShopPress = (shop: any) => {
-    // Navigate to Booking Screen (We will create this next)
     navigation.navigate('Booking', { shopId: shop.id, shopName: shop.shop_name });
   };
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Find a Barber</Text>
+        {/* 3. Wrap Title and Logout in a Row */}
+        <View style={styles.topRow}>
+            <Text style={styles.title}>Find a Barber</Text>
+            <TouchableOpacity onPress={signOut}>
+                <View style={{flexDirection: 'row', alignItems: 'center'}}>
+                    <Text style={{color: Colors.primary, marginRight: 5}}>Logout</Text>
+                    <MaterialCommunityIcons name="logout" size={24} color={Colors.primary} />
+                </View>
+            </TouchableOpacity>
+        </View>
+
         <Searchbar
           placeholder="Search shops..."
           onChangeText={setSearchQuery}
@@ -83,8 +94,10 @@ export default function ExploreScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  header: { padding: 20, paddingTop: 60, backgroundColor: Colors.surface, paddingBottom: 10 },
-  title: { fontSize: 28, fontWeight: 'bold', marginBottom: 10, color: Colors.text },
+  header: { padding: 20, paddingTop: 60, backgroundColor: Colors.surface, paddingBottom: 15 },
+  // 4. New Style for the top row
+  topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
+  title: { fontSize: 28, fontWeight: 'bold', color: Colors.text },
   searchBar: { borderRadius: 10, backgroundColor: '#F3F4F6' },
   card: { marginBottom: 16, borderRadius: 12, overflow: 'hidden', backgroundColor: 'white' },
   cardContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 },

@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, FlatList, Alert, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, FlatList, Alert, TouchableOpacity, Platform } from 'react-native';
 import { Text, Button, Checkbox, ActivityIndicator, IconButton } from 'react-native-paper';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { supabase } from '../../services/supabase';
 import { Colors } from '../../config/colors';
+// import { View, StyleSheet, FlatList, Alert, TouchableOpacity } from 'react-native';
 
 export default function BookingScreen() {
   const route = useRoute<any>();
@@ -54,6 +55,8 @@ export default function BookingScreen() {
     }
   };
 
+  // ... imports ...
+
   const confirmBooking = async () => {
     if (selectedServices.length === 0) {
         Alert.alert("Missing Info", "Please select at least one service.");
@@ -81,16 +84,25 @@ export default function BookingScreen() {
     if (error) {
         Alert.alert("Booking Failed", error.message);
     } else {
-        Alert.alert("Success", "Booking sent to barber!", [
-            { 
-              text: "OK", 
-              onPress: () => {
-                // NAVIGATION FIX:
-                // We navigate to the 'CustomerApp' stack, then the 'MyBookings' tab
-                navigation.navigate('CustomerApp', { screen: 'MyBookings' });
-              } 
-            }
-        ]);
+        // --- FIXED NAVIGATION LOGIC ---
+        const goHome = () => {
+            // 1. Force the navigation to the main Customer Stack
+            // 2. Then specify the specific Tab we want
+            navigation.navigate('CustomerApp', { 
+              screen: 'MyBookings' 
+            });
+        };
+
+        if (Platform.OS === 'web') {
+            // Web Alert (Blocking)
+            alert("Success: Booking sent to barber!");
+            goHome();
+        } else {
+            // Mobile Alert
+            Alert.alert("Success", "Booking sent to barber!", [
+                { text: "OK", onPress: goHome }
+            ]);
+        }
     }
   };
 
