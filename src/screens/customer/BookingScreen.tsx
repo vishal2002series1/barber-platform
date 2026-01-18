@@ -4,6 +4,7 @@ import { Text, Button, Checkbox, ActivityIndicator, IconButton, Card, Divider, C
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { supabase } from '../../services/supabase';
 import { Colors } from '../../config/colors';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 export default function BookingScreen() {
   const route = useRoute<any>();
@@ -29,14 +30,19 @@ export default function BookingScreen() {
 
   useEffect(() => {
     if (shopDetails?.owner_id) {
-        fetchSchedule();
+        // Only fetch schedule if shop is actually open
+        if (shopDetails.is_open) {
+            fetchSchedule();
+        } else {
+            setSlots([]); // Clear slots if closed
+        }
     }
   }, [shopDetails, selectedDate]);
 
   const fetchShopData = async () => {
     setLoading(true);
     
-    // 1. Get Shop Details (Image, Location, Owner)
+    // 1. Get Shop Details
     const { data: shop } = await supabase
         .from('shops')
         .select('owner_id, image_url, latitude, longitude, is_open')
@@ -45,7 +51,7 @@ export default function BookingScreen() {
     
     if (shop) setShopDetails(shop);
 
-    // 2. Get Services (Rate Card)
+    // 2. Get Services
     const { data: menu } = await supabase
         .from('services')
         .select('*')
@@ -63,12 +69,9 @@ export default function BookingScreen() {
     });
 
     if (schedule) {
-        // --- SMART FILTERING ---
-        // Filter out slots that are in the past (if the selected date is Today)
         const now = new Date();
         const filtered = schedule.filter((slot: any) => {
             const slotTime = new Date(slot.slot_time);
-            // If slot is today, ensure it's in the future. If different day, show all.
             if (new Date(selectedDate).toDateString() === now.toDateString()) {
                 return slotTime > now;
             }
@@ -124,6 +127,8 @@ export default function BookingScreen() {
 
   if (loading) return <ActivityIndicator style={{marginTop: 50}} />;
 
+  const isShopClosed = shopDetails && !shopDetails.is_open;
+
   return (
     <View style={styles.container}>
       {/* --- HEADER IMAGE --- */}
@@ -139,8 +144,13 @@ export default function BookingScreen() {
                   <Chip icon="map-marker" textStyle={{fontSize: 12}} style={{marginRight: 8}}>
                     {shopDetails?.latitude ? `${shopDetails.latitude.toFixed(3)}, ${shopDetails.longitude.toFixed(3)}` : "Location N/A"}
                   </Chip>
-                  <Chip icon="clock" textStyle={{fontSize: 12}}>
-                    {shopDetails?.is_open ? "Open Now" : "Closed"}
+                  {/* Status Badge Color Logic */}
+                  <Chip 
+                    icon={isShopClosed ? "close-circle" : "clock"} 
+                    textStyle={{fontSize: 12, color: isShopClosed ? 'red' : 'green'}}
+                    style={{backgroundColor: 'white'}}
+                  >
+                    {isShopClosed ? "Currently Closed" : "Open Now"}
                   </Chip>
               </View>
           </View>
@@ -148,7 +158,7 @@ export default function BookingScreen() {
 
       <ScrollView contentContainerStyle={{paddingBottom: 100}}>
         
-        {/* --- RATE CARD (SERVICES) --- */}
+        {/* --- RATE CARD --- */}
         <View style={styles.section}>
             <Text style={styles.sectionHeader}>Select Services</Text>
             {services.map((item) => (
@@ -168,14 +178,24 @@ export default function BookingScreen() {
 
         <Divider style={{height: 6, backgroundColor: '#f4f4f4'}} />
 
-        {/* --- TIME SLOTS --- */}
+        {/* --- TIME SLOTS (WITH LOGIC) --- */}
         <View style={styles.section}>
             <Text style={styles.sectionHeader}>Select Time ({selectedDate})</Text>
-            {slots.length === 0 ? (
+            
+            {/* 1. If Shop is CLOSED */}
+            {isShopClosed ? (
+                <View style={styles.closedContainer}>
+                    <MaterialCommunityIcons name="store-off" size={40} color={Colors.error} />
+                    <Text style={styles.closedText}>This shop is currently offline.</Text>
+                    <Text style={styles.closedSubText}>Please check back later or try another barber.</Text>
+                </View>
+            ) : slots.length === 0 ? (
+            /* 2. If Shop is OPEN but NO SLOTS */
                 <Text style={{color: 'gray', fontStyle: 'italic', marginTop: 10}}>
                     No available slots for the rest of the day.
                 </Text>
             ) : (
+            /* 3. If Slots Available */
                 <View style={styles.slotsGrid}>
                     {slots.map((slot: any, index: number) => {
                         const timeLabel = new Date(slot.slot_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
@@ -209,16 +229,17 @@ export default function BookingScreen() {
 
       </ScrollView>
 
-      {/* --- FOOTER --- */}
-      <View style={styles.footer}>
+      {/* --- FOOTER (DISABLED IF CLOSED) --- */}
+      <View style={[styles.footer, isShopClosed && {opacity: 0.5}]}>
         <Button 
             mode="contained" 
             onPress={confirmBooking} 
             loading={submitting}
             buttonColor={Colors.primary}
             contentStyle={{height: 50}}
+            disabled={isShopClosed} // <--- Disable Button
         >
-            Confirm & Book
+            {isShopClosed ? "Shop is Closed" : "Confirm & Book"}
         </Button>
       </View>
     </View>
@@ -261,6 +282,11 @@ const styles = StyleSheet.create({
   slotSelected: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   slotBusy: { backgroundColor: '#F3F4F6', borderColor: '#eee' },
   slotText: { fontWeight: '600', fontSize: 13 },
+
+  // Closed State
+  closedContainer: { alignItems: 'center', padding: 30, backgroundColor: '#FFF5F5', borderRadius: 10 },
+  closedText: { color: Colors.error, fontSize: 16, fontWeight: 'bold', marginTop: 10 },
+  closedSubText: { color: 'gray', marginTop: 5 },
 
   footer: { 
       padding: 20, borderTopWidth: 1, borderTopColor: '#eee', 
