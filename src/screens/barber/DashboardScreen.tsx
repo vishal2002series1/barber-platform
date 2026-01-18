@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, ScrollView, Alert, RefreshControl, TouchableOpacity } from 'react-native';
-import { Text, Card, Button, Switch, ActivityIndicator, Chip, Avatar } from 'react-native-paper';
+import { Text, Card, Button, Switch, Chip, Avatar } from 'react-native-paper';
 import { supabase } from '../../services/supabase';
 import { useAuth } from '../../auth/AuthContext';
 import { Colors } from '../../config/colors';
@@ -8,7 +8,7 @@ import { Strings } from '../../config/strings';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 export default function DashboardScreen() {
-  const { userProfile, signOut } = useAuth(); // Added signOut
+  const { userProfile, signOut } = useAuth(); 
   const [isOnline, setIsOnline] = useState(true);
   const [requests, setRequests] = useState<any[]>([]);
   const [stats, setStats] = useState({ todayEarnings: 0, jobsDone: 0 });
@@ -38,7 +38,7 @@ export default function DashboardScreen() {
       .from('bookings')
       .select('*, profiles:customer_id(full_name)')
       .eq('barber_id', userProfile!.id)
-      .eq('status', 'requested');
+      .eq('status', 'requested'); // Ensure this matches your DB default status
     
     if (pending) setRequests(pending);
 
@@ -84,17 +84,26 @@ export default function DashboardScreen() {
     await supabase.from('shops').update({ is_open: val }).eq('owner_id', userProfile!.id);
   };
 
+  // --- FIX IS HERE ---
   const handleBookingAction = async (bookingId: string, action: 'accept' | 'reject') => {
+    // Convert 'accept' -> 'accepted' and 'reject' -> 'rejected'
+    // to match what we assume standard status text should be.
+    const newStatus = action === 'accept' ? 'accepted' : 'rejected';
+
+    console.log(`Updating booking ${bookingId} to ${newStatus}`);
+
     const { error } = await supabase.rpc('manage_booking', {
       p_booking_id: bookingId,
-      p_action: action,
-      p_reason: action === 'reject' ? 'Barber is busy' : null
+      p_status: newStatus // <--- UPDATED: Using correct parameter name
     });
 
-    if (error) Alert.alert("Error", error.message);
-    else {
+    if (error) {
+      console.error("Booking Action Error:", error);
+      Alert.alert("Error", error.message);
+    } else {
+      // Remove the item from the local list immediately so it feels fast
       setRequests(prev => prev.filter(r => r.id !== bookingId));
-      fetchDashboardData();
+      fetchDashboardData(); // Refresh to be sure
     }
   };
 
@@ -111,6 +120,7 @@ export default function DashboardScreen() {
         </View>
         <View style={{flexDirection: 'row', alignItems: 'center'}}>
             <Switch value={isOnline} onValueChange={toggleOnline} color="white" style={{marginRight: 15}} />
+            {/* LOGOUT BUTTON */}
             <TouchableOpacity onPress={signOut}>
                 <MaterialCommunityIcons name="logout" size={24} color="white" />
             </TouchableOpacity>
