@@ -21,20 +21,26 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // 1. Check active session on startup
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       if (session) fetchProfile(session.user.id);
       else setLoading(false);
     });
 
-    supabase.auth.onAuthStateChange((_event, session) => {
+    // 2. Listen for auth changes (Login/Logout)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
-      if (session) fetchProfile(session.user.id);
-      else {
+      if (session) {
+        fetchProfile(session.user.id);
+      } else {
+        // Ensure profile is cleared when session is null
         setUserProfile(null);
         setLoading(false);
       }
     });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const fetchProfile = async (userId: string) => {
@@ -54,15 +60,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  // --- THE FIX IS HERE ---
   const signOut = async () => {
-    await supabase.auth.signOut();
+    try {
+      // 1. Force the App to "Logout" visually INSTANTLY
+      setSession(null);
+      setUserProfile(null);
+      
+      // 2. Then tell Supabase to clean up in the background
+      await supabase.auth.signOut();
+    } catch (error) {
+      console.error("Error signing out:", error);
+    }
   };
-
-  // ... inside AuthProvider ...
 
   const signup = async (email: string, password: string, role: 'customer' | 'barber', fullName: string) => {
     try {
-      // We only need to call this. The Database Trigger handles Profiles and Shops!
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -75,9 +88,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       });
 
       if (error) throw error;
-
-      // Note: By default, Supabase requires email verification. 
-      // If you haven't disabled it, the user can't login until they click the email link.
       return { success: true };
     } catch (err: any) {
       console.error("Signup error:", err);
