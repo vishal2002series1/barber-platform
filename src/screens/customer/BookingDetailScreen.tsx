@@ -12,6 +12,7 @@ export default function BookingDetailScreen() {
 
   const [booking, setBooking] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [cancelling, setCancelling] = useState(false); // New State
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
@@ -19,9 +20,6 @@ export default function BookingDetailScreen() {
   }, [bookingId]);
 
   const fetchBookingDetails = async () => {
-    console.log("Fetching details for:", bookingId);
-    
-    // CORRECTED QUERY: Using 'phone' instead of 'phone_number'
     const { data, error } = await supabase
       .from('bookings')
       .select(`
@@ -48,6 +46,38 @@ export default function BookingDetailScreen() {
     }
   };
 
+  // --- NEW FEATURE: CANCEL BOOKING ---
+  const handleCancel = async () => {
+    Alert.alert(
+        "Cancel Booking",
+        "Are you sure you want to cancel this appointment?",
+        [
+            { text: "No", style: "cancel" },
+            { 
+                text: "Yes, Cancel", 
+                style: 'destructive',
+                onPress: async () => {
+                    setCancelling(true);
+                    
+                    // 1. Call the database function
+                    const { error } = await supabase.rpc('manage_booking', {
+                        p_booking_id: bookingId,
+                        p_status: 'cancelled'
+                    });
+
+                    if (error) {
+                        Alert.alert("Error", error.message);
+                        setCancelling(false);
+                    } else {
+                        Alert.alert("Cancelled", "Your booking has been cancelled.");
+                        navigation.goBack(); // Return to list
+                    }
+                }
+            }
+        ]
+    );
+  };
+
   const openMap = () => {
     if (booking?.shops?.latitude && booking?.shops?.longitude) {
       const lat = booking.shops.latitude;
@@ -59,7 +89,6 @@ export default function BookingDetailScreen() {
         android: `geo:0,0?q=${lat},${lng}(${label})`,
         web: `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`
       });
-      
       if (url) Linking.openURL(url);
     } else {
         Alert.alert("No Location", "Shop coordinates not found.");
@@ -67,9 +96,7 @@ export default function BookingDetailScreen() {
   };
 
   const callShop = () => {
-    // CORRECTED: Using 'phone' from your database schema
     const phone = booking?.shops?.profiles?.phone;
-    
     if (phone) {
       Linking.openURL(`tel:${phone}`);
     } else {
@@ -79,7 +106,6 @@ export default function BookingDetailScreen() {
 
   if (loading) return <ActivityIndicator style={{marginTop: 50}} color={Colors.primary} />;
 
-  // ERROR STATE DISPLAY
   if (errorMsg) {
     return (
         <View style={styles.container}>
@@ -88,8 +114,7 @@ export default function BookingDetailScreen() {
                 <Text style={{fontWeight:'bold'}}>Error</Text>
             </View>
             <View style={{padding: 20, alignItems: 'center'}}>
-                <Text style={{color: 'red', fontSize: 16, marginBottom: 10}}>Failed to load booking</Text>
-                <Text style={{backgroundColor: '#eee', padding: 10}}>{errorMsg}</Text>
+                <Text style={{color: 'red'}}>Failed to load details</Text>
             </View>
         </View>
     );
@@ -99,11 +124,14 @@ export default function BookingDetailScreen() {
 
   const statusColor = 
     booking.status === 'accepted' ? Colors.success : 
-    booking.status === 'rejected' ? Colors.error : '#F59E0B';
+    booking.status === 'rejected' ? Colors.error : 
+    booking.status === 'cancelled' ? 'gray' : '#F59E0B';
+
+  // Only show Cancel button if status is NOT cancelled or done
+  const canCancel = booking.status !== 'cancelled' && booking.status !== 'completed' && booking.status !== 'rejected';
 
   return (
     <View style={styles.container}>
-      {/* HEADER */}
       <View style={styles.header}>
         <IconButton icon="arrow-left" size={24} onPress={() => navigation.goBack()} />
         <Text style={styles.headerTitle}>Booking Details</Text>
@@ -141,24 +169,32 @@ export default function BookingDetailScreen() {
                 left={(props) => <Avatar.Icon {...props} icon="store" backgroundColor={Colors.secondary} />}
             />
             <Card.Actions style={{justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 16}}>
-                <Button 
-                    mode="outlined" 
-                    icon="phone" 
-                    onPress={callShop}
-                    textColor={Colors.primary}
-                >
+                <Button mode="outlined" icon="phone" onPress={callShop} textColor={Colors.primary}>
                     Call
                 </Button>
-                <Button 
-                    mode="contained" 
-                    icon="map-marker" 
-                    onPress={openMap}
-                    buttonColor={Colors.primary}
-                >
+                <Button mode="contained" icon="map-marker" onPress={openMap} buttonColor={Colors.primary}>
                     Directions
                 </Button>
             </Card.Actions>
         </Card>
+
+        {/* CANCEL BUTTON AREA */}
+        {canCancel && (
+            <View style={{marginTop: 30, marginBottom: 50}}>
+                <Button 
+                    mode="contained" 
+                    buttonColor={Colors.error} 
+                    onPress={handleCancel}
+                    loading={cancelling}
+                    icon="cancel"
+                >
+                    Cancel Booking
+                </Button>
+                <Text style={{textAlign:'center', color:'gray', marginTop:10, fontSize:12}}>
+                    Please cancel at least 1 hour in advance.
+                </Text>
+            </View>
+        )}
       </ScrollView>
     </View>
   );
@@ -175,7 +211,6 @@ const styles = StyleSheet.create({
   content: { padding: 16 },
   card: { marginBottom: 20, backgroundColor: 'white' },
   sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 10, color: Colors.text },
-  
   dateText: { fontSize: 18, fontWeight: 'bold', color: Colors.text },
   timeText: { fontSize: 24, fontWeight: 'bold', color: Colors.primary, marginVertical: 5 },
   priceText: { fontSize: 16, color: 'gray' },

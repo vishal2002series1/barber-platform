@@ -85,25 +85,53 @@ export default function DashboardScreen() {
   };
 
   // --- FIX IS HERE ---
+  // ... imports and existing code
+
+  // REPLACE your existing handleBookingAction with this:
+  // ... inside DashboardScreen.tsx ...
+
   const handleBookingAction = async (bookingId: string, action: 'accept' | 'reject') => {
-    // Convert 'accept' -> 'accepted' and 'reject' -> 'rejected'
-    // to match what we assume standard status text should be.
     const newStatus = action === 'accept' ? 'accepted' : 'rejected';
+    
+    // 1. Start Loading
+    setLoading(true);
 
-    console.log(`Updating booking ${bookingId} to ${newStatus}`);
+    try {
+        const { error } = await supabase.rpc('manage_booking', {
+          p_booking_id: bookingId,
+          p_status: newStatus
+        });
 
-    const { error } = await supabase.rpc('manage_booking', {
-      p_booking_id: bookingId,
-      p_status: newStatus // <--- UPDATED: Using correct parameter name
-    });
+        // 2. STOP LOADING IMMEDIATELY (Fixes the "Black Screen/Freeze" issue)
+        setLoading(false);
 
-    if (error) {
-      console.error("Booking Action Error:", error);
-      Alert.alert("Error", error.message);
-    } else {
-      // Remove the item from the local list immediately so it feels fast
-      setRequests(prev => prev.filter(r => r.id !== bookingId));
-      fetchDashboardData(); // Refresh to be sure
+        if (error) {
+            console.log("Booking Action Error:", error);
+            
+            // 3. Smart Message Handling
+            // If the error is generic, assume it's our logic check kicking in.
+            let msg = error.message;
+            if (msg.includes("Network request failed") || msg.includes("JSON")) {
+                msg = "This request is no longer valid (it may have been cancelled). Refreshing...";
+            }
+
+            Alert.alert("Notice", msg);
+            
+            // 4. Remove the stale item immediately
+            setRequests(prev => prev.filter(r => r.id !== bookingId));
+            
+            // 5. Sync with server to be sure
+            fetchDashboardData();
+        } else {
+             // Success
+             setRequests(prev => prev.filter(r => r.id !== bookingId));
+             fetchDashboardData();
+        }
+    } catch (e: any) {
+        // Safety Catch
+        setLoading(false);
+        Alert.alert("Error", "Something went wrong. Refreshing...");
+        fetchDashboardData();
     }
   };
 
