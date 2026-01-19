@@ -6,6 +6,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { Colors } from '../../config/colors';
 import { Strings } from '../../config/strings';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import BookingAlertModal from '../../components/BookingAlertModal'; // <--- IMPORT
 
 export default function DashboardScreen() {
   const { userProfile, signOut } = useAuth(); 
@@ -14,11 +15,16 @@ export default function DashboardScreen() {
   const [stats, setStats] = useState({ todayEarnings: 0, jobsDone: 0 });
   const [loading, setLoading] = useState(true);
 
+  // NEW STATE FOR ALARM
+  const [incomingRequest, setIncomingRequest] = useState<any>(null);
+  const [modalVisible, setModalVisible] = useState(false);
+
   // 1. Load Initial Data
   useEffect(() => {
     if (userProfile?.id) {
       fetchDashboardData();
-      subscribeToBookings();
+      const unsubscribe = subscribeToBookings();
+      return () => { unsubscribe(); };
     }
   }, [userProfile]);
 
@@ -38,7 +44,7 @@ export default function DashboardScreen() {
       .from('bookings')
       .select('*, profiles:customer_id(full_name)')
       .eq('barber_id', userProfile!.id)
-      .eq('status', 'requested'); // Ensure this matches your DB default status
+      .eq('status', 'requested'); 
     
     if (pending) setRequests(pending);
 
@@ -56,21 +62,33 @@ export default function DashboardScreen() {
     setLoading(false);
   };
 
-  // 2. Real-Time Listener
+  // 2. Real-Time Listener (The Alarm Trigger)
   const subscribeToBookings = () => {
     const channel = supabase
       .channel('barber-dashboard')
       .on(
         'postgres_changes',
         {
-          event: 'INSERT',
+          event: 'INSERT', // Listen for NEW bookings
           schema: 'public',
           table: 'bookings',
           filter: `barber_id=eq.${userProfile!.id}`
         },
-        (payload) => {
-          Alert.alert(Strings.newRequest, "Check your queue!");
-          fetchDashboardData();
+        async (payload) => {
+          console.log("New Booking Received!", payload);
+          
+          // Fetch full details (Customer Name) to show in Modal
+          const { data } = await supabase
+            .from('bookings')
+            .select('*, profiles:customer_id(full_name)')
+            .eq('id', payload.new.id)
+            .single();
+            
+          if (data) {
+             setIncomingRequest(data);
+             setModalVisible(true); // <--- OPEN THE ALARM
+             fetchDashboardData(); // Refresh list behind the modal
+          }
         }
       )
       .subscribe();
@@ -78,22 +96,16 @@ export default function DashboardScreen() {
     return () => supabase.removeChannel(channel);
   };
 
-  // 3. Actions
   const toggleOnline = async (val: boolean) => {
     setIsOnline(val);
     await supabase.from('shops').update({ is_open: val }).eq('owner_id', userProfile!.id);
   };
 
-  // --- FIX IS HERE ---
-  // ... imports and existing code
-
-  // REPLACE your existing handleBookingAction with this:
-  // ... inside DashboardScreen.tsx ...
-
+  // 3. Actions (Accept/Reject)
   const handleBookingAction = async (bookingId: string, action: 'accept' | 'reject') => {
+    setModalVisible(false); // Close modal if open
+
     const newStatus = action === 'accept' ? 'accepted' : 'rejected';
-    
-    // 1. Start Loading
     setLoading(true);
 
     try {
@@ -102,35 +114,23 @@ export default function DashboardScreen() {
           p_status: newStatus
         });
 
-        // 2. STOP LOADING IMMEDIATELY (Fixes the "Black Screen/Freeze" issue)
         setLoading(false);
 
         if (error) {
-            console.log("Booking Action Error:", error);
-            
-            // 3. Smart Message Handling
-            // If the error is generic, assume it's our logic check kicking in.
             let msg = error.message;
             if (msg.includes("Network request failed") || msg.includes("JSON")) {
-                msg = "This request is no longer valid (it may have been cancelled). Refreshing...";
+                msg = "This request is no longer valid (it may have been cancelled).";
             }
-
             Alert.alert("Notice", msg);
-            
-            // 4. Remove the stale item immediately
-            setRequests(prev => prev.filter(r => r.id !== bookingId));
-            
-            // 5. Sync with server to be sure
-            fetchDashboardData();
-        } else {
-             // Success
-             setRequests(prev => prev.filter(r => r.id !== bookingId));
-             fetchDashboardData();
         }
+        
+        // Refresh everything
+        setRequests(prev => prev.filter(r => r.id !== bookingId));
+        fetchDashboardData();
+
     } catch (e: any) {
-        // Safety Catch
         setLoading(false);
-        Alert.alert("Error", "Something went wrong. Refreshing...");
+        Alert.alert("Error", "Something went wrong.");
         fetchDashboardData();
     }
   };
@@ -140,7 +140,15 @@ export default function DashboardScreen() {
       style={styles.container} 
       refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchDashboardData} />}
     >
-      {/* HEADER: STATUS TOGGLE & LOGOUT */}
+      {/* --- THE ALARM MODAL --- */}
+      <BookingAlertModal 
+        visible={modalVisible} 
+        booking={incomingRequest}
+        onAccept={() => handleBookingAction(incomingRequest?.id, 'accept')}
+        onReject={() => handleBookingAction(incomingRequest?.id, 'reject')}
+      />
+
+      {/* HEADER */}
       <View style={[styles.header, { backgroundColor: isOnline ? Colors.success : Colors.textSecondary }]}>
         <View>
           <Text style={styles.headerTitle}>{isOnline ? Strings.goOnline : Strings.goOffline}</Text>
@@ -148,7 +156,6 @@ export default function DashboardScreen() {
         </View>
         <View style={{flexDirection: 'row', alignItems: 'center'}}>
             <Switch value={isOnline} onValueChange={toggleOnline} color="white" style={{marginRight: 15}} />
-            {/* LOGOUT BUTTON */}
             <TouchableOpacity onPress={signOut}>
                 <MaterialCommunityIcons name="logout" size={24} color="white" />
             </TouchableOpacity>
@@ -156,7 +163,7 @@ export default function DashboardScreen() {
       </View>
 
       <View style={styles.content}>
-        {/* STATS CARDS */}
+        {/* STATS */}
         <View style={styles.statsRow}>
           <Card style={styles.statCard}>
             <Card.Content>
@@ -172,7 +179,7 @@ export default function DashboardScreen() {
           </Card>
         </View>
 
-        {/* PENDING REQUESTS */}
+        {/* REQUEST LIST */}
         <Text style={styles.sectionTitle}>Incoming Requests ({requests.length})</Text>
         {requests.length === 0 ? (
           <View style={styles.emptyState}>

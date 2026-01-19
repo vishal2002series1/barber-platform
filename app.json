@@ -25,6 +25,12 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "7e27632f-f491-40e1-b268-4ef4a2e50ebe"
+      }
+    },
+    "owner": "vishal2002series"
   }
 }

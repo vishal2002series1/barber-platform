@@ -2,6 +2,7 @@ import React, { createContext, useState, useEffect, useContext } from 'react';
 import { supabase } from '../services/supabase';
 import { Session } from '@supabase/supabase-js';
 import { UserProfile } from '../types';
+import { registerForPushNotificationsAsync } from '../services/notifications'; // <--- IMPORT
 
 type AuthContextType = {
   session: Session | null;
@@ -21,20 +22,23 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // 1. Check active session on startup
+    // 1. Session Listener
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
-      if (session) fetchProfile(session.user.id);
-      else setLoading(false);
+      if (session) {
+          fetchProfile(session.user.id);
+          updatePushToken(session.user.id); // <--- Get Token on Load
+      } else {
+          setLoading(false);
+      }
     });
 
-    // 2. Listen for auth changes (Login/Logout)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       if (session) {
         fetchProfile(session.user.id);
+        updatePushToken(session.user.id); // <--- Get Token on Login
       } else {
-        // Ensure profile is cleared when session is null
         setUserProfile(null);
         setLoading(false);
       }
@@ -42,6 +46,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  // --- NEW FUNCTION: SAVE TOKEN ---
+  const updatePushToken = async (userId: string) => {
+    try {
+        const token = await registerForPushNotificationsAsync();
+        if (token) {
+            await supabase
+                .from('profiles')
+                .update({ push_token: token })
+                .eq('id', userId);
+        }
+    } catch (error) {
+        console.log("Error updating push token:", error);
+    }
+  };
 
   const fetchProfile = async (userId: string) => {
     try {
@@ -60,14 +79,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  // --- THE FIX IS HERE ---
   const signOut = async () => {
     try {
-      // 1. Force the App to "Logout" visually INSTANTLY
       setSession(null);
       setUserProfile(null);
-      
-      // 2. Then tell Supabase to clean up in the background
       await supabase.auth.signOut();
     } catch (error) {
       console.error("Error signing out:", error);
