@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, FlatList, RefreshControl, TouchableOpacity } from 'react-native';
-import { Text, Card, Chip, ActivityIndicator, IconButton } from 'react-native-paper';
+import { Text, Card, Chip, ActivityIndicator } from 'react-native-paper';
 import { supabase } from '../../services/supabase';
 import { useAuth } from '../../auth/AuthContext';
 import { Colors } from '../../config/colors';
-import { useFocusEffect } from '@react-navigation/native';
-import { MaterialCommunityIcons } from '@expo/vector-icons'; // Import Icon
+import { useFocusEffect, useNavigation } from '@react-navigation/native'; // <--- Added useNavigation
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 export default function MyBookingsScreen() {
-  const { userProfile, signOut } = useAuth(); // <--- Import signOut
+  const { userProfile, signOut } = useAuth();
+  const navigation = useNavigation<any>(); // <--- Hook
   const [bookings, setBookings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -20,7 +21,7 @@ export default function MyBookingsScreen() {
 
   const fetchBookings = async () => {
     setLoading(true);
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('bookings')
       .select(`
         id,
@@ -40,14 +41,13 @@ export default function MyBookingsScreen() {
     switch (status) {
       case 'accepted': return Colors.success;
       case 'rejected': return Colors.error;
-      case 'requested': return '#F59E0B'; // Orange
+      case 'requested': return '#F59E0B';
       default: return Colors.textSecondary;
     }
   };
 
   return (
     <View style={styles.container}>
-      {/* HEADER WITH LOGOUT BUTTON */}
       <View style={styles.header}>
         <Text style={styles.title}>My Bookings</Text>
         <TouchableOpacity onPress={signOut}>
@@ -71,23 +71,27 @@ export default function MyBookingsScreen() {
           refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchBookings} />}
           contentContainerStyle={{ padding: 16 }}
           renderItem={({ item }) => (
-            <Card style={styles.card}>
-              <Card.Title
-                title={item.shops?.shop_name || "Barber Shop"}
-                subtitle={new Date(item.slot_start).toLocaleString()}
-                right={(props) => (
-                  <Chip 
-                    textStyle={{ color: 'white', fontWeight: 'bold', fontSize: 12 }} 
-                    style={{ backgroundColor: getStatusColor(item.status), marginRight: 16 }}
-                  >
-                    {item.status.toUpperCase()}
-                  </Chip>
-                )}
-              />
-              <Card.Content>
-                 <Text style={{fontWeight: 'bold', marginTop: 5}}>Amount: ${item.price}</Text>
-              </Card.Content>
-            </Card>
+            // --- CLICKABLE CARD ---
+            <TouchableOpacity onPress={() => navigation.navigate('BookingDetail', { bookingId: item.id })}>
+                <Card style={styles.card}>
+                <Card.Title
+                    title={item.shops?.shop_name || "Barber Shop"}
+                    subtitle={new Date(item.slot_start).toLocaleString()}
+                    right={(props) => (
+                    <Chip 
+                        textStyle={{ color: 'white', fontWeight: 'bold', fontSize: 12 }} 
+                        style={{ backgroundColor: getStatusColor(item.status), marginRight: 16 }}
+                    >
+                        {item.status.toUpperCase()}
+                    </Chip>
+                    )}
+                />
+                <Card.Content>
+                    <Text style={{fontWeight: 'bold', marginTop: 5}}>Amount: ${item.price}</Text>
+                    <Text style={{color: Colors.primary, fontSize: 12, marginTop: 10}}>Tap for details & contact info</Text>
+                </Card.Content>
+                </Card>
+            </TouchableOpacity>
           )}
         />
       )}
@@ -103,7 +107,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'white', 
     borderBottomWidth: 1, 
     borderBottomColor: '#eee',
-    flexDirection: 'row', // Align Title and Logout side-by-side
+    flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center'
   },
