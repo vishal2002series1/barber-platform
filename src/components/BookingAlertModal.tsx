@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, Modal, Vibration, TouchableOpacity, Image } from 'react-native';
 import { Text, Button, Card, Avatar, ActivityIndicator } from 'react-native-paper';
-import { Audio } from 'expo-av'; // Sound Library
+// import { Audio } from 'expo-av'; // Sound Library
 import { Colors } from '../config/colors';
+import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from 'expo-av';
 
 // Types
 interface BookingAlertModalProps {
@@ -33,14 +34,36 @@ export default function BookingAlertModal({ visible, booking, onAccept, onReject
   }, [visible]);
 
   // 2. Sound Logic
+  // ... imports 
+  // Make sure you have this import at the top:
+  // import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from 'expo-av';
+
   async function playSound() {
     try {
-        // Load a default "Phone Ring" sound from online or asset
-        // For MVP, we use a simple generic sound URL
+        // 1. Configure Audio Session to be "dominant" (Duck other sounds, play in silent mode)
+        await Audio.setAudioModeAsync({
+            allowsRecordingIOS: false,
+            staysActiveInBackground: true,
+            // iOS: Play even if hardware switch is silent
+            playsInSilentModeIOS: true, 
+            // iOS: Lower other apps' volume (like Spotify)
+            interruptionModeIOS: InterruptionModeIOS.DoNotMix, 
+            // Android: Lower other apps' volume
+            interruptionModeAndroid: InterruptionModeAndroid.DoNotMix, 
+            shouldDuckAndroid: true,
+            playThroughEarpieceAndroid: false,
+        });
+
+        // 2. Load the LOCAL file (Make sure alarm.mp3 is in assets folder)
+        // If you haven't downloaded a file yet, keep the URL version commented out below for backup
         const { sound } = await Audio.Sound.createAsync(
-            { uri: 'https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg' },
+            require('../../assets/alarm.mp3'), 
             { shouldPlay: true, isLooping: true }
         );
+
+        // 3. Force Volume to Max (Range 0.0 to 1.0)
+        await sound.setVolumeAsync(1.0);
+        
         setSound(sound);
         await sound.playAsync();
     } catch (e) {
