@@ -1,19 +1,22 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { View, StyleSheet, ScrollView, Alert, RefreshControl, TouchableOpacity } from 'react-native';
-import { Text, Card, Button, Switch, Chip, Avatar } from 'react-native-paper';
+import { Text, Card, Button, Switch, Chip, Avatar, IconButton } from 'react-native-paper';
 import { supabase } from '../../services/supabase';
 import { useAuth } from '../../auth/AuthContext';
 import { Colors } from '../../config/colors';
 import { Strings } from '../../config/strings';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import BookingAlertModal from '../../components/BookingAlertModal'; 
 
 export default function DashboardScreen() {
   const { userProfile, signOut } = useAuth(); 
-  
+  const navigation = useNavigation<any>();
+
   // State
   const [isOnline, setIsOnline] = useState(true);
   const [requests, setRequests] = useState<any[]>([]);
+  const [activeJobs, setActiveJobs] = useState<any[]>([]);
   const [stats, setStats] = useState({ todayEarnings: 0, jobsDone: 0 });
   const [loading, setLoading] = useState(true);
 
@@ -21,15 +24,15 @@ export default function DashboardScreen() {
   const [incomingRequest, setIncomingRequest] = useState<any>(null);
   const [modalVisible, setModalVisible] = useState(false);
 
-  // REF: To track "Online" status inside the Realtime Listener without re-subscribing
+  // REF: To track "Online" status inside the Realtime Listener
   const isOnlineRef = useRef(isOnline);
+  const userRef = useRef(userProfile); // Keep user ref for listener
 
-  // 1. Keep Ref in sync with State
   useEffect(() => {
     isOnlineRef.current = isOnline;
-  }, [isOnline]);
+    userRef.current = userProfile;
+  }, [isOnline, userProfile]);
 
-  // 2. Load Initial Data
   useEffect(() => {
     if (userProfile?.id) {
       fetchDashboardData();
@@ -41,78 +44,99 @@ export default function DashboardScreen() {
   const fetchDashboardData = async () => {
     setLoading(true);
     
-    // Get Shop Status
+    // 1. Get Shop Status
     const { data: shop } = await supabase
       .from('shops')
       .select('is_open, id')
       .eq('owner_id', userProfile!.id)
       .single();
-    
     if (shop) setIsOnline(shop.is_open);
 
-    // Get Pending Requests (SORTED BY NEWEST CREATED)
+    // 2. Get INCOMING Requests (Pending)
     const { data: pending } = await supabase
       .from('bookings')
       .select('*, profiles:customer_id(full_name)')
       .eq('barber_id', userProfile!.id)
       .eq('status', 'requested')
-      .order('created_at', { ascending: false }); // <--- FIX 1: Sort by "Most Recent Request"
-    
+      .order('created_at', { ascending: false });
     if (pending) setRequests(pending);
 
-    // Get Stats
-    const today = new Date().toISOString().split('T')[0];
+    // 3. Get ACTIVE Jobs
+    const todayStr = new Date().toISOString().split('T')[0];
+    const { data: active } = await supabase
+      .from('bookings')
+      .select('*, profiles:customer_id(full_name)')
+      .eq('barber_id', userProfile!.id)
+      .eq('status', 'accepted')
+      .gte('slot_start', todayStr) 
+      .order('slot_start', { ascending: true });
+    if (active) setActiveJobs(active);
+
+    // 4. Get Stats
     const { data: earnings } = await supabase
       .rpc('get_barber_stats', { 
         p_barber_id: userProfile!.id, 
-        p_start_date: today, 
-        p_end_date: today 
+        p_start_date: todayStr, 
+        p_end_date: todayStr 
       });
-      
     if (earnings) setStats({ todayEarnings: earnings.revenue, jobsDone: earnings.completed });
     
     setLoading(false);
   };
 
-  // 3. Real-Time Listener (The Alarm Trigger)
+  // --- ROBUST REAL-TIME LISTENER ---
   const subscribeToBookings = () => {
+    // 1. Create a unique channel key to ensure fresh connection
+    const channelKey = `dashboard-${userProfile!.id}-${Date.now()}`;
+    
     const channel = supabase
-      .channel('barber-dashboard')
+      .channel(channelKey) 
       .on(
         'postgres_changes',
         {
-          event: 'INSERT', 
+          event: '*', // Listen to ALL events (Insert/Update)
           schema: 'public',
-          table: 'bookings',
-          filter: `barber_id=eq.${userProfile!.id}`
+          table: 'bookings'
+          // REMOVED FILTER: We filter in JS below for reliability
         },
         async (payload) => {
-          console.log("New Booking Signal Received");
+          // JS FILTER: Is this for me?
+          const newRecord = payload.new as any;
+          if (!newRecord || newRecord.barber_id !== userRef.current?.id) {
+             return; // Not for this barber, ignore.
+          }
 
-          // CHECK 1: Are we Online? (Using Ref for live value)
-          if (!isOnlineRef.current) {
-              console.log("Ignored: Shop is Offline");
-              return; 
+          console.log("Signal Received:", payload.eventType);
+
+          // Handle INSERT (New Booking Alarm)
+          if (payload.eventType === 'INSERT') {
+            if (!isOnlineRef.current) return;
+            
+            // Check for conflict
+            const { count } = await supabase
+              .from('bookings')
+              .select('*', { count: 'exact', head: true })
+              .eq('barber_id', userRef.current?.id)
+              .eq('status', 'accepted')
+              .eq('slot_start', newRecord.slot_start);
+
+            if (count && count > 0) return; // Busy
+
+            // Fetch details for Modal
+            const { data } = await supabase
+              .from('bookings')
+              .select('*, profiles:customer_id(full_name)')
+              .eq('id', newRecord.id)
+              .single();
+              
+            if (data && data.status === 'requested') {
+               setIncomingRequest(data);
+               setModalVisible(true); 
+            }
           }
           
-          // Fetch full details
-          const { data } = await supabase
-            .from('bookings')
-            .select('*, profiles:customer_id(full_name)')
-            .eq('id', payload.new.id)
-            .single();
-            
-          if (data) {
-             // CHECK 2: Is this actually a REQUEST? (Fixes self-blocking alarm)
-             if (data.status !== 'requested') {
-                 console.log("Ignored: Status is", data.status);
-                 return;
-             }
-
-             setIncomingRequest(data);
-             setModalVisible(true); 
-             fetchDashboardData(); 
-          }
+          // Refresh Data on ANY change
+          fetchDashboardData();
         }
       )
       .subscribe();
@@ -121,14 +145,12 @@ export default function DashboardScreen() {
   };
 
   const toggleOnline = async (val: boolean) => {
-    setIsOnline(val); // UI updates instantly
-    // DB update happens in background
+    setIsOnline(val); 
     await supabase.from('shops').update({ is_open: val }).eq('owner_id', userProfile!.id);
   };
 
   const handleBookingAction = async (bookingId: string, action: 'accept' | 'reject') => {
     setModalVisible(false);
-
     const newStatus = action === 'accept' ? 'accepted' : 'rejected';
     setLoading(true);
 
@@ -137,26 +159,19 @@ export default function DashboardScreen() {
           p_booking_id: bookingId,
           p_status: newStatus
         });
-
         setLoading(false);
-
         if (error) {
-            let msg = error.message;
-            if (msg.includes("Network request failed") || msg.includes("JSON")) {
-                msg = "This request is no longer valid (it may have been cancelled).";
-            }
-            Alert.alert("Notice", msg);
+            Alert.alert("Notice", "This request is no longer valid.");
         }
-        
-        // Optimistic Update
-        setRequests(prev => prev.filter(r => r.id !== bookingId));
         fetchDashboardData();
-
-    } catch (e: any) {
+    } catch (e) {
         setLoading(false);
-        Alert.alert("Error", "Something went wrong.");
         fetchDashboardData();
     }
+  };
+
+  const handleCompleteJob = (bookingId: string) => {
+      navigation.navigate('ReceiptBuilder', { bookingId });
   };
 
   return (
@@ -164,7 +179,6 @@ export default function DashboardScreen() {
       style={styles.container} 
       refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchDashboardData} />}
     >
-      {/* ALARM MODAL */}
       <BookingAlertModal 
         visible={modalVisible} 
         booking={incomingRequest}
@@ -203,7 +217,35 @@ export default function DashboardScreen() {
           </Card>
         </View>
 
-        {/* REQUEST LIST */}
+        {/* ACTIVE JOBS */}
+        {activeJobs.length > 0 && (
+            <>
+                <Text style={styles.sectionTitle}>Upcoming Appointments ({activeJobs.length})</Text>
+                {activeJobs.map((job) => (
+                    <Card key={job.id} style={[styles.requestCard, { borderLeftColor: Colors.primary }]}>
+                        <Card.Title 
+                            title={job.profiles?.full_name || "Customer"} 
+                            subtitle={new Date(job.slot_start).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                            left={(props) => <Avatar.Icon {...props} icon="calendar-check" backgroundColor={Colors.primary} />}
+                        />
+                        <Card.Actions>
+                            <Button 
+                                mode="contained" 
+                                buttonColor={Colors.secondary} 
+                                icon="check-all"
+                                style={{width: '100%'}}
+                                onPress={() => handleCompleteJob(job.id)}
+                            >
+                                Complete Job
+                            </Button>
+                        </Card.Actions>
+                    </Card>
+                ))}
+                <View style={{height: 20}} />
+            </>
+        )}
+
+        {/* INCOMING REQUESTS */}
         <Text style={styles.sectionTitle}>Incoming Requests ({requests.length})</Text>
         {requests.length === 0 ? (
           <View style={styles.emptyState}>
@@ -214,11 +256,14 @@ export default function DashboardScreen() {
             <Card key={req.id} style={styles.requestCard}>
               <Card.Title 
                 title={req.profiles?.full_name || "New Customer"} 
-                subtitle={`Time: ${new Date(req.slot_start).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`}
-                left={(props) => <Avatar.Icon {...props} icon="account" backgroundColor={Colors.secondary} />}
+                subtitle={`Requested: ${new Date(req.slot_start).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`}
+                left={(props) => <Avatar.Icon {...props} icon="account-clock" backgroundColor={Colors.secondary} />}
               />
               <Card.Content>
-                <Chip icon="cash" style={{alignSelf: 'flex-start'}}>${req.price}</Chip>
+                 <Text style={{fontSize: 12, color: 'gray', marginBottom: 5}}>
+                    Received: {new Date(req.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                 </Text>
+                 <Chip icon="cash" style={{alignSelf: 'flex-start'}}>${req.price}</Chip>
               </Card.Content>
               <Card.Actions>
                 <Button textColor={Colors.error} onPress={() => handleBookingAction(req.id, 'reject')}>Reject</Button>
