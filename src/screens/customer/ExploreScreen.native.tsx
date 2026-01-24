@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, Dimensions, Alert, TouchableOpacity, FlatList, Image } from 'react-native';
-import { Text, Searchbar, ActivityIndicator, FAB, Card, Chip, IconButton } from 'react-native-paper';
+import { View, StyleSheet, Dimensions, Alert, TouchableOpacity, FlatList } from 'react-native';
+import { Text, Searchbar, ActivityIndicator, Card, Chip, IconButton } from 'react-native-paper';
 import MapView, { Marker, Callout, PROVIDER_DEFAULT } from 'react-native-maps';
 import { useNavigation } from '@react-navigation/native';
 import * as Location from 'expo-location';
@@ -14,9 +14,10 @@ export default function ExploreScreen() {
   const [shops, setShops] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [viewMode, setViewMode] = useState<'map' | 'list'>('map'); // TOGGLE STATE
+  const [viewMode, setViewMode] = useState<'map' | 'list'>('map'); 
+  const [permissionGranted, setPermissionGranted] = useState(false);
   
-  // Default to a central location (e.g., Lucknow or San Francisco) if GPS fails
+  // Default Map Region (Central View)
   const [userLocation, setUserLocation] = useState({
     latitude: 26.8467, 
     longitude: 80.9462,
@@ -25,57 +26,80 @@ export default function ExploreScreen() {
   });
 
   useEffect(() => {
-    fetchLocation();
-    fetchShops();
+    initializeExplore();
   }, []);
 
-  const fetchLocation = async () => {
+  const initializeExplore = async () => {
     try {
+        // 1. Ask Permission
         let { status } = await Location.requestForegroundPermissionsAsync();
+        
         if (status !== 'granted') {
-           console.log("Location permission denied");
+           console.log("Permission denied. Showing standard list.");
+           fetchShopsFallback(); // Fallback if no location
            return;
         }
 
+        // 2. Get Coords
+        setPermissionGranted(true);
         let location = await Location.getCurrentPositionAsync({});
+        const { latitude, longitude } = location.coords;
+
         setUserLocation({
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
+          latitude,
+          longitude,
           latitudeDelta: 0.05,
           longitudeDelta: 0.05,
         });
+
+        // 3. Call The "Nearby Engine" (RPC)
+        fetchNearbyShops(latitude, longitude);
+
     } catch (err) {
-        console.log("Error getting location:", err);
+        console.log("Error init explore:", err);
+        fetchShopsFallback();
     }
   };
 
-  const fetchShops = async () => {
-    // 1. CLEAN QUERY (No comments inside string)
-    console.log("Fetching shops...");
+  const fetchNearbyShops = async (lat: number, long: number) => {
+    console.log("Fetching nearby shops...");
+    
+    // CALLING YOUR NEW DATABASE FUNCTION
+    const { data, error } = await supabase.rpc('get_nearby_shops', {
+        user_lat: lat, 
+        user_long: long
+    });
+
+    if (error) {
+        console.error("RPC Error:", error);
+        Alert.alert("Error", "Could not load nearby shops.");
+    } else if (data) {
+        setShops(data);
+    }
+    setLoading(false);
+  };
+
+  const fetchShopsFallback = async () => {
+    // Standard fetch if GPS fails (Sorted by best rating)
     const { data, error } = await supabase
       .from('shops')
-      .select(`
-        id, 
-        shop_name, 
-        is_open,
-        image_url,
-        latitude,
-        longitude,
-        profiles:owner_id ( full_name ) 
-      `);
+      .select('id, shop_name, is_open, image_url, latitude, longitude, rating, review_count, profiles:owner_id(full_name)')
+      .order('rating', { ascending: false }); // Show best shops first
       
-    if (error) {
-      console.error("Error fetching shops:", error.message);
-      Alert.alert("Error", "Could not load shops.");
-    } else if (data) {
-      console.log(`Found ${data.length} shops.`);
-      setShops(data);
-    }
+    if (data) setShops(data);
+    if (error) Alert.alert("Error", "Could not load shops.");
     setLoading(false);
   };
 
   const handleShopPress = (shop: any) => {
     navigation.navigate('Booking', { shopId: shop.id, shopName: shop.shop_name });
+  };
+
+  // Helper: Format Distance
+  const getDistanceLabel = (meters?: number) => {
+      if (!meters) return null;
+      if (meters < 1000) return `${Math.round(meters)}m`;
+      return `${(meters / 1000).toFixed(1)} km`;
   };
 
   // --- RENDER MAP VIEW ---
@@ -94,10 +118,22 @@ export default function ExploreScreen() {
             coordinate={{ latitude: shop.latitude, longitude: shop.longitude }}
             title={shop.shop_name}
           >
+            {/* Custom Callout with Rating */}
             <Callout onPress={() => handleShopPress(shop)}>
               <View style={styles.callout}>
                 <Text style={styles.calloutTitle}>{shop.shop_name}</Text>
-                <Text style={{ color: Colors.primary }}>Tap to Book</Text>
+                <View style={{flexDirection: 'row', alignItems: 'center', marginVertical: 4}}>
+                    <MaterialCommunityIcons name="star" size={14} color="#FFB100" />
+                    <Text style={{fontWeight: 'bold', fontSize: 12, marginLeft: 2}}>
+                        {shop.rating ? shop.rating.toFixed(1) : "New"}
+                    </Text>
+                    {shop.dist_meters && (
+                        <Text style={{color: 'gray', fontSize: 12, marginLeft: 8}}>
+                           • {getDistanceLabel(shop.dist_meters)}
+                        </Text>
+                    )}
+                </View>
+                <Text style={{ color: Colors.primary, fontSize: 12, fontWeight: 'bold' }}>Tap to Book</Text>
               </View>
             </Callout>
           </Marker>
@@ -117,13 +153,40 @@ export default function ExploreScreen() {
           <Card style={styles.card}>
             <Card.Cover source={{ uri: item.image_url || 'https://placehold.co/600x400/1A1A1A/FFF?text=Barber+Shop' }} />
             <Card.Content style={styles.cardContent}>
-              <View>
+              
+              {/* Left Side: Name & Location */}
+              <View style={{flex: 1}}>
                 <Text style={styles.shopName}>{item.shop_name}</Text>
-                <Text style={styles.ownerName}>{item.profiles?.full_name}</Text>
+                
+                {/* Rating Row */}
+                <View style={{flexDirection: 'row', alignItems: 'center', marginTop: 4}}>
+                    <MaterialCommunityIcons name="star" size={16} color="#FFB100" />
+                    <Text style={{fontWeight: 'bold', marginLeft: 4, marginRight: 10}}>
+                        {item.rating ? item.rating.toFixed(1) : "New"}
+                        <Text style={{color: 'gray', fontWeight: 'normal'}}> ({item.review_count || 0})</Text>
+                    </Text>
+                </View>
+
+                {/* Distance Badge */}
+                {item.dist_meters && (
+                    <View style={{flexDirection: 'row', alignItems: 'center', marginTop: 6}}>
+                        <MaterialCommunityIcons name="map-marker-radius" size={14} color={Colors.primary} />
+                        <Text style={{color: Colors.primary, fontSize: 12, fontWeight: 'bold', marginLeft: 2}}>
+                            {getDistanceLabel(item.dist_meters)} away
+                        </Text>
+                    </View>
+                )}
               </View>
-              <Chip icon={item.is_open ? "check" : "clock"} textStyle={{fontSize: 12}}>
+
+              {/* Right Side: Status Chip */}
+              <Chip 
+                icon={item.is_open ? "check" : "clock"} 
+                textStyle={{fontSize: 12}}
+                style={{backgroundColor: item.is_open ? '#E6FFFA' : '#FFF5F5'}}
+              >
                 {item.is_open ? "Open" : "Closed"}
               </Chip>
+
             </Card.Content>
           </Card>
         </TouchableOpacity>
@@ -133,7 +196,7 @@ export default function ExploreScreen() {
 
   return (
     <View style={styles.container}>
-      {/* HEADER WITH TOGGLE */}
+      {/* HEADER */}
       <View style={styles.header}>
         <Searchbar
           placeholder="Search shops..."
@@ -167,25 +230,19 @@ export default function ExploreScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: 'white' },
   header: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    padding: 10, 
-    paddingTop: 50, // Safe area for notch
-    backgroundColor: 'white', 
-    zIndex: 10,
-    elevation: 4,
-    shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4
+    flexDirection: 'row', alignItems: 'center', 
+    padding: 10, paddingTop: 50, 
+    backgroundColor: 'white', zIndex: 10, elevation: 4 
   },
   searchBar: { flex: 1, borderRadius: 10, backgroundColor: '#f4f4f4', height: 45 },
   
   // Map Styles
   map: { width: Dimensions.get('window').width, flex: 1 },
-  callout: { width: 140, padding: 5, alignItems: 'center' },
-  calloutTitle: { fontWeight: 'bold', marginBottom: 5 },
+  callout: { width: 150, padding: 5, alignItems: 'center' },
+  calloutTitle: { fontWeight: 'bold', marginBottom: 2 },
 
   // List Styles
-  card: { marginBottom: 16, borderRadius: 12, overflow: 'hidden', backgroundColor: 'white', elevation: 2 },
-  cardContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 },
+  card: { marginBottom: 16, borderRadius: 12, overflow: 'hidden', backgroundColor: 'white', elevation: 3 },
+  cardContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: 10 },
   shopName: { fontSize: 16, fontWeight: 'bold', color: Colors.text },
-  ownerName: { color: 'gray', fontSize: 14 },
 });

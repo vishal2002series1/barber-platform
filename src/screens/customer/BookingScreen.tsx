@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, FlatList, Alert, TouchableOpacity, Image, Platform, ScrollView } from 'react-native';
-import { Text, Button, Checkbox, ActivityIndicator, IconButton, Card, Divider, Chip } from 'react-native-paper';
+import { View, StyleSheet, Alert, TouchableOpacity, Image, Platform, ScrollView } from 'react-native';
+import { Text, Button, Checkbox, ActivityIndicator, IconButton, Chip, Divider } from 'react-native-paper';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { supabase } from '../../services/supabase';
 import { Colors } from '../../config/colors';
@@ -30,11 +30,10 @@ export default function BookingScreen() {
 
   useEffect(() => {
     if (shopDetails?.owner_id) {
-        // Only fetch schedule if shop is actually open
         if (shopDetails.is_open) {
             fetchSchedule();
         } else {
-            setSlots([]); // Clear slots if closed
+            setSlots([]); 
         }
     }
   }, [shopDetails, selectedDate]);
@@ -51,18 +50,18 @@ export default function BookingScreen() {
     
     if (shop) setShopDetails(shop);
 
-    // 2. Get Services
+    // 2. Get Services (FIX: Only fetch ACTIVE services)
     const { data: menu } = await supabase
         .from('services')
         .select('*')
-        .eq('shop_id', shopId);
+        .eq('shop_id', shopId)
+        .eq('is_active', true); // <--- THIS WAS MISSING
     
     if (menu) setServices(menu);
     setLoading(false);
   };
 
   const fetchSchedule = async () => {
-    // 3. Get Slots
     const { data: schedule } = await supabase.rpc('get_barber_schedule', {
         p_barber_id: shopDetails.owner_id,
         p_date: selectedDate
@@ -131,7 +130,7 @@ export default function BookingScreen() {
 
   return (
     <View style={styles.container}>
-      {/* --- HEADER IMAGE --- */}
+      {/* HEADER IMAGE */}
       <View style={styles.imageContainer}>
           <Image 
             source={{ uri: shopDetails?.image_url || 'https://placehold.co/600x400/1A1A1A/FFF?text=Barber+Shop' }} 
@@ -144,7 +143,6 @@ export default function BookingScreen() {
                   <Chip icon="map-marker" textStyle={{fontSize: 12}} style={{marginRight: 8}}>
                     {shopDetails?.latitude ? `${shopDetails.latitude.toFixed(3)}, ${shopDetails.longitude.toFixed(3)}` : "Location N/A"}
                   </Chip>
-                  {/* Status Badge Color Logic */}
                   <Chip 
                     icon={isShopClosed ? "close-circle" : "clock"} 
                     textStyle={{fontSize: 12, color: isShopClosed ? 'red' : 'green'}}
@@ -158,7 +156,7 @@ export default function BookingScreen() {
 
       <ScrollView contentContainerStyle={{paddingBottom: 100}}>
         
-        {/* --- RATE CARD --- */}
+        {/* SERVICES LIST */}
         <View style={styles.section}>
             <Text style={styles.sectionHeader}>Select Services</Text>
             {services.map((item) => (
@@ -178,24 +176,20 @@ export default function BookingScreen() {
 
         <Divider style={{height: 6, backgroundColor: '#f4f4f4'}} />
 
-        {/* --- TIME SLOTS (WITH LOGIC) --- */}
+        {/* TIME SLOTS */}
         <View style={styles.section}>
             <Text style={styles.sectionHeader}>Select Time ({selectedDate})</Text>
             
-            {/* 1. If Shop is CLOSED */}
             {isShopClosed ? (
                 <View style={styles.closedContainer}>
                     <MaterialCommunityIcons name="store-off" size={40} color={Colors.error} />
                     <Text style={styles.closedText}>This shop is currently offline.</Text>
-                    <Text style={styles.closedSubText}>Please check back later or try another barber.</Text>
                 </View>
             ) : slots.length === 0 ? (
-            /* 2. If Shop is OPEN but NO SLOTS */
                 <Text style={{color: 'gray', fontStyle: 'italic', marginTop: 10}}>
                     No available slots for the rest of the day.
                 </Text>
             ) : (
-            /* 3. If Slots Available */
                 <View style={styles.slotsGrid}>
                     {slots.map((slot: any, index: number) => {
                         const timeLabel = new Date(slot.slot_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
@@ -229,7 +223,7 @@ export default function BookingScreen() {
 
       </ScrollView>
 
-      {/* --- FOOTER (DISABLED IF CLOSED) --- */}
+      {/* FOOTER */}
       <View style={[styles.footer, isShopClosed && {opacity: 0.5}]}>
         <Button 
             mode="contained" 
@@ -237,7 +231,7 @@ export default function BookingScreen() {
             loading={submitting}
             buttonColor={Colors.primary}
             contentStyle={{height: 50}}
-            disabled={isShopClosed} // <--- Disable Button
+            disabled={isShopClosed}
         >
             {isShopClosed ? "Shop is Closed" : "Confirm & Book"}
         </Button>
@@ -248,8 +242,6 @@ export default function BookingScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: 'white' },
-  
-  // Header Styles
   imageContainer: { height: 250, width: '100%', position: 'relative' },
   headerImage: { width: '100%', height: '100%' },
   backBtn: { position: 'absolute', top: 40, left: 10, backgroundColor: 'rgba(0,0,0,0.3)' },
@@ -260,19 +252,14 @@ const styles = StyleSheet.create({
   },
   shopTitle: { color: 'white', fontSize: 24, fontWeight: 'bold', marginBottom: 8 },
   badgeRow: { flexDirection: 'row' },
-
-  // Content Styles
   section: { padding: 20 },
   sectionHeader: { fontSize: 18, fontWeight: 'bold', marginBottom: 15 },
-  
   serviceRow: { 
       flexDirection: 'row', alignItems: 'center', 
       paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' 
   },
   serviceName: { fontSize: 16, fontWeight: '500' },
   servicePrice: { color: 'gray', marginTop: 2 },
-  
-  // Slots
   slotsGrid: { flexDirection: 'row', flexWrap: 'wrap' },
   slotBadge: { 
     width: '30%', margin: '1.5%', paddingVertical: 10, 
@@ -282,12 +269,8 @@ const styles = StyleSheet.create({
   slotSelected: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   slotBusy: { backgroundColor: '#F3F4F6', borderColor: '#eee' },
   slotText: { fontWeight: '600', fontSize: 13 },
-
-  // Closed State
   closedContainer: { alignItems: 'center', padding: 30, backgroundColor: '#FFF5F5', borderRadius: 10 },
   closedText: { color: Colors.error, fontSize: 16, fontWeight: 'bold', marginTop: 10 },
-  closedSubText: { color: 'gray', marginTop: 5 },
-
   footer: { 
       padding: 20, borderTopWidth: 1, borderTopColor: '#eee', 
       position: 'absolute', bottom: 0, width: '100%', backgroundColor: 'white' 
