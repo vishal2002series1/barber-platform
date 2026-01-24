@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { View, StyleSheet, ScrollView, Alert, RefreshControl, TouchableOpacity, Linking } from 'react-native';
-import { Text, Card, Button, Switch, Chip, Avatar, Portal, Modal, Provider, IconButton } from 'react-native-paper';
+import { Text, Card, Button, Switch, Chip, Avatar, Portal, Modal, Provider, IconButton, TextInput } from 'react-native-paper';
 import { supabase } from '../../services/supabase';
 import { useAuth } from '../../auth/AuthContext';
 import { Colors } from '../../config/colors';
@@ -24,9 +24,12 @@ export default function DashboardScreen() {
   const [incomingRequest, setIncomingRequest] = useState<any>(null);
   const [modalVisible, setModalVisible] = useState(false);
 
-  // Contact Modal State
+  // Contact & Cancel Modal State
   const [contactModalVisible, setContactModalVisible] = useState(false);
   const [selectedJob, setSelectedJob] = useState<any>(null);
+  const [cancelMode, setCancelMode] = useState(false); // <--- New State
+  const [cancelReason, setCancelReason] = useState(''); // <--- New State
+  const [cancelling, setCancelling] = useState(false);
 
   // REF
   const isOnlineRef = useRef(isOnline);
@@ -58,7 +61,7 @@ export default function DashboardScreen() {
       .single();
     if (shop) setIsOnline(shop.is_open);
 
-    // 2. Get INCOMING Requests (Join Services to show what they want)
+    // 2. Get INCOMING Requests
     const { data: pending } = await supabase
       .from('bookings')
       .select(`
@@ -71,7 +74,7 @@ export default function DashboardScreen() {
       .order('created_at', { ascending: false });
     if (pending) setRequests(pending);
 
-    // 3. Get ACTIVE Jobs (Join Services)
+    // 3. Get ACTIVE Jobs
     const { data: active } = await supabase
       .from('bookings')
       .select(`
@@ -119,7 +122,6 @@ export default function DashboardScreen() {
 
             if (count && count > 0) return; 
 
-            // Fetch details (including services for the modal)
             const { data } = await supabase
               .from('bookings')
               .select(`
@@ -170,6 +172,8 @@ export default function DashboardScreen() {
 
   const openContactOptions = (job: any) => {
       setSelectedJob(job);
+      setCancelMode(false); // Reset to normal mode
+      setCancelReason('');
       setContactModalVisible(true);
   };
 
@@ -185,7 +189,35 @@ export default function DashboardScreen() {
       setContactModalVisible(false);
   };
 
-  // HELPER: Extract service names string
+  // --- NEW: CANCEL LOGIC ---
+  const handleConfirmCancel = async () => {
+      if (!cancelReason.trim()) {
+          Alert.alert("Required", "Please enter a reason for cancellation.");
+          return;
+      }
+
+      setCancelling(true);
+      
+      // Update DB directly
+      const { error } = await supabase
+        .from('bookings')
+        .update({ 
+            status: 'cancelled',
+            cancellation_reason: cancelReason 
+        })
+        .eq('id', selectedJob.id);
+
+      setCancelling(false);
+      setContactModalVisible(false);
+
+      if (error) {
+          Alert.alert("Error", error.message);
+      } else {
+          Alert.alert("Cancelled", "Appointment has been cancelled.");
+          fetchDashboardData(); // Refresh list
+      }
+  };
+
   const getServiceList = (job: any) => {
       if (!job.booking_services || job.booking_services.length === 0) return "Service";
       return job.booking_services.map((bs: any) => bs.services?.name).join(", ");
@@ -219,7 +251,7 @@ export default function DashboardScreen() {
       </View>
 
       <View style={styles.content}>
-        {/* STATS LINKED TO EARNINGS SCREEN */}
+        {/* STATS */}
         <View style={styles.statsRow}>
           <Card 
             style={styles.statCard} 
@@ -255,7 +287,6 @@ export default function DashboardScreen() {
                                 left={(props) => <Avatar.Icon {...props} icon="calendar-check" backgroundColor={Colors.primary} />}
                                 right={(props) => <IconButton {...props} icon="dots-vertical" onPress={() => openContactOptions(job)} />}
                             />
-                            {/* NEW: DISPLAY SERVICES */}
                             <Card.Content>
                                 <Text style={{color: Colors.secondary, fontWeight: 'bold', marginBottom: 10}}>
                                     ✂️ {getServiceList(job)}
@@ -311,23 +342,68 @@ export default function DashboardScreen() {
         )}
       </View>
 
-      {/* CONTACT MODAL */}
+      {/* --- CONTACT & CANCEL MODAL --- */}
       <Portal>
           <Modal visible={contactModalVisible} onDismiss={() => setContactModalVisible(false)} contentContainerStyle={styles.modalContent}>
-              <Text style={{fontSize: 20, fontWeight: 'bold', marginBottom: 15, textAlign: 'center'}}>
-                Contact {selectedJob?.profiles?.full_name}
-              </Text>
               
-              <Button mode="contained" icon="phone" onPress={handleCall} style={{marginBottom: 10}} buttonColor={Colors.primary}>
-                  Call Customer
-              </Button>
-              <Button mode="outlined" icon="whatsapp" onPress={handleWhatsApp} textColor="#25D366" style={{borderColor: '#25D366'}}>
-                  WhatsApp Message
-              </Button>
-              
-              <Button mode="text" onPress={() => setContactModalVisible(false)} style={{marginTop: 10}}>
-                  Close
-              </Button>
+              {!cancelMode ? (
+                  // MODE A: CONTACT OPTIONS
+                  <>
+                    <Text style={{fontSize: 20, fontWeight: 'bold', marginBottom: 15, textAlign: 'center'}}>
+                        {selectedJob?.profiles?.full_name}
+                    </Text>
+                    
+                    <Button mode="contained" icon="phone" onPress={handleCall} style={{marginBottom: 10}} buttonColor={Colors.primary}>
+                        Call Customer
+                    </Button>
+                    <Button mode="outlined" icon="whatsapp" onPress={handleWhatsApp} textColor="#25D366" style={{borderColor: '#25D366', marginBottom: 20}}>
+                        WhatsApp Message
+                    </Button>
+
+                    <Button mode="contained" icon="cancel" onPress={() => setCancelMode(true)} buttonColor={Colors.error} style={{marginBottom: 10}}>
+                        Cancel Appointment
+                    </Button>
+                    
+                    <Button mode="text" onPress={() => setContactModalVisible(false)}>
+                        Close
+                    </Button>
+                  </>
+              ) : (
+                  // MODE B: CANCELLATION REASON
+                  <>
+                    <Text style={{fontSize: 18, fontWeight: 'bold', marginBottom: 10, color: Colors.error}}>
+                        Cancel Appointment
+                    </Text>
+                    <Text style={{fontSize: 14, color: 'gray', marginBottom: 10}}>
+                        Please provide a reason. The customer will be notified.
+                    </Text>
+                    
+                    <TextInput 
+                        label="Reason (e.g. Emergency)"
+                        value={cancelReason}
+                        onChangeText={setCancelReason}
+                        mode="outlined"
+                        multiline
+                        numberOfLines={3}
+                        style={{backgroundColor: 'white', marginBottom: 15}}
+                    />
+
+                    <Button 
+                        mode="contained" 
+                        onPress={handleConfirmCancel} 
+                        loading={cancelling}
+                        buttonColor={Colors.error}
+                        style={{marginBottom: 10}}
+                    >
+                        Confirm Cancellation
+                    </Button>
+
+                    <Button mode="text" onPress={() => setCancelMode(false)}>
+                        Back
+                    </Button>
+                  </>
+              )}
+
           </Modal>
       </Portal>
 
