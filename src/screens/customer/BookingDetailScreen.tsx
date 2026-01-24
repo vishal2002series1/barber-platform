@@ -30,6 +30,7 @@ export default function BookingDetailScreen() {
   }, [bookingId]);
 
   const fetchBookingDetails = async () => {
+    // Note: select('*') automatically includes cancellation_reason
     const { data, error } = await supabase
       .from('bookings')
       .select(`
@@ -122,8 +123,9 @@ export default function BookingDetailScreen() {
   if (!booking) return null;
 
   const isCompleted = booking.status === 'completed';
-  const receipt = booking.receipt_data; // JSON Data
-  const statusColor = isCompleted ? Colors.primary : booking.status === 'accepted' ? Colors.success : 'gray';
+  const isCancelled = booking.status === 'cancelled'; // <--- Check Cancelled
+  const receipt = booking.receipt_data;
+  const statusColor = isCompleted ? Colors.primary : isCancelled || booking.status === 'rejected' ? Colors.error : booking.status === 'accepted' ? Colors.success : 'gray';
 
   return (
     <Provider>
@@ -137,6 +139,21 @@ export default function BookingDetailScreen() {
 
       <ScrollView contentContainerStyle={styles.content}>
         
+        {/* --- 0. CANCELLED BANNER (NEW) --- */}
+        {isCancelled && (
+            <Surface style={styles.cancelBanner} elevation={2}>
+                <View style={{flexDirection:'row', alignItems:'center', marginBottom: 5}}>
+                    <MaterialCommunityIcons name="alert-circle" size={24} color={Colors.error} />
+                    <Text style={{fontSize: 18, fontWeight: 'bold', color: Colors.error, marginLeft: 8}}>
+                        Booking Cancelled
+                    </Text>
+                </View>
+                <Text style={{color: '#555', marginTop: 4, fontStyle: 'italic'}}>
+                    Reason: "{booking.cancellation_reason || 'No reason provided.'}"
+                </Text>
+            </Surface>
+        )}
+
         {/* --- 1. DIGITAL RECEIPT (If Completed) --- */}
         {isCompleted && receipt ? (
              <Surface style={styles.receiptCard} elevation={2}>
@@ -150,7 +167,6 @@ export default function BookingDetailScreen() {
 
                  <Divider />
                  
-                 {/* Items List */}
                  <View style={{marginVertical: 15}}>
                     {receipt.items.map((item: any, index: number) => (
                         <View key={index} style={styles.row}>
@@ -162,7 +178,6 @@ export default function BookingDetailScreen() {
 
                  <Divider />
 
-                 {/* Totals */}
                  <View style={{marginTop: 15}}>
                     {receipt.discount > 0 && (
                         <View style={styles.row}>
@@ -184,7 +199,6 @@ export default function BookingDetailScreen() {
                     </View>
                  </View>
 
-                 {/* WRITE REVIEW BUTTON */}
                  <Button 
                     mode="contained" 
                     icon="star" 
@@ -195,8 +209,8 @@ export default function BookingDetailScreen() {
                     Rate Experience
                  </Button>
              </Surface>
-        ) : (
-            /* --- 2. STANDARD STATUS CARD (If Not Completed) --- */
+        ) : !isCancelled && (
+            /* --- 2. STANDARD STATUS CARD (Only if NOT cancelled or completed) --- */
             <Surface style={styles.statusCard} elevation={1}>
                 <Chip 
                     textStyle={{color: 'white', fontWeight: 'bold'}}
@@ -229,8 +243,8 @@ export default function BookingDetailScreen() {
             </Card.Actions>
         </Card>
 
-        {/* CANCEL BUTTON (Only if active) */}
-        {!isCompleted && booking.status !== 'cancelled' && booking.status !== 'rejected' && (
+        {/* CANCEL BUTTON (User can cancel too) */}
+        {!isCompleted && !isCancelled && booking.status !== 'rejected' && (
             <Button 
                 mode="contained" 
                 buttonColor={Colors.error} 
@@ -248,46 +262,30 @@ export default function BookingDetailScreen() {
             <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalOverlay}>
                 <Surface style={styles.modalContent}>
                     <Text style={styles.modalTitle}>Rate Your Cut ✂️</Text>
-                    
-                    {/* Star Rating */}
                     <View style={{flexDirection: 'row', justifyContent: 'center', marginVertical: 15}}>
                         {[1, 2, 3, 4, 5].map((star) => (
                             <TouchableOpacity key={star} onPress={() => setRating(star)}>
                                 <MaterialCommunityIcons 
                                     name={star <= rating ? "star" : "star-outline"} 
-                                    size={40} 
-                                    color="#FFB100" 
-                                    style={{marginHorizontal: 5}}
+                                    size={40} color="#FFB100" style={{marginHorizontal: 5}}
                                 />
                             </TouchableOpacity>
                         ))}
                     </View>
-
                     <TextInput 
-                        style={styles.input}
-                        placeholder="How was the service?"
-                        value={comment}
-                        onChangeText={setComment}
-                        multiline
+                        style={styles.input} placeholder="How was the service?"
+                        value={comment} onChangeText={setComment} multiline
                     />
-
                     <View style={styles.modalButtons}>
                         <Button onPress={() => setReviewModalVisible(false)} style={{flex:1}}>Cancel</Button>
-                        <Button 
-                            mode="contained" 
-                            onPress={submitReview} 
-                            loading={submittingReview}
-                            style={{flex:1}}
-                        >
-                            Submit
-                        </Button>
+                        <Button mode="contained" onPress={submitReview} loading={submittingReview} style={{flex:1}}>Submit</Button>
                     </View>
                 </Surface>
             </KeyboardAvoidingView>
         </Modal>
       </Portal>
       
-      {/* Cancel Modal (Reused) */}
+      {/* Cancel Modal */}
       <Portal>
         <Modal visible={cancelModalVisible} transparent animationType="fade" onRequestClose={() => setCancelModalVisible(false)}>
             <View style={styles.modalOverlay}>
@@ -318,16 +316,14 @@ const styles = StyleSheet.create({
   content: { padding: 16 },
   
   // Cards
+  cancelBanner: { padding: 20, borderRadius: 12, backgroundColor: '#FEF2F2', marginBottom: 20, borderLeftWidth: 4, borderLeftColor: Colors.error },
   receiptCard: { padding: 20, borderRadius: 12, backgroundColor: 'white', marginBottom: 20 },
   statusCard: { padding: 20, borderRadius: 12, backgroundColor: 'white', alignItems: 'center', marginBottom: 20 },
   card: { marginBottom: 15, backgroundColor: 'white', borderRadius: 12 },
   
-  // Text
   dateText: { fontSize: 18, fontWeight: '600', marginTop: 5 },
   timeText: { fontSize: 32, fontWeight: 'bold', color: Colors.primary, marginVertical: 5 },
   sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 10, color: Colors.text },
-  
-  // Receipt Rows
   row: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
   itemText: { fontSize: 16, color: '#333' },
   itemPrice: { fontSize: 16, fontWeight: 'bold' },
