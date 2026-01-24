@@ -4,7 +4,6 @@ import { Text, Card, Button, ActivityIndicator, Chip, Avatar, IconButton, Divide
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { supabase } from '../../services/supabase';
 import { Colors } from '../../config/colors';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 export default function BookingDetailScreen() {
   const route = useRoute<any>();
@@ -24,7 +23,6 @@ export default function BookingDetailScreen() {
   }, [bookingId]);
 
   const fetchBookingDetails = async () => {
-    // Fetches cancellation_reason and phone now
     const { data, error } = await supabase
       .from('bookings')
       .select(`
@@ -51,7 +49,6 @@ export default function BookingDetailScreen() {
     }
   };
 
-  // --- ACTIONS ---
   const handleCancelWithReason = async () => {
     if (!cancelReason.trim()) {
         Alert.alert("Reason Required", "Please let the barber know why you are cancelling.");
@@ -60,7 +57,6 @@ export default function BookingDetailScreen() {
 
     setCancelling(true);
     
-    // Update DB with reason
     const { error } = await supabase
         .from('bookings')
         .update({ 
@@ -111,7 +107,6 @@ export default function BookingDetailScreen() {
   if (loading) return <ActivityIndicator style={{marginTop: 50}} color={Colors.primary} />;
   if (!booking) return null;
 
-  // Visual Helpers
   const statusColor = 
     booking.status === 'accepted' ? Colors.success : 
     booking.status === 'rejected' ? Colors.error : 
@@ -120,10 +115,14 @@ export default function BookingDetailScreen() {
   const canCancel = booking.status === 'requested' || booking.status === 'accepted';
   const isPast = new Date(booking.slot_start) < new Date();
 
+  // Format Created At Date
+  const bookedOn = new Date(booking.created_at).toLocaleString([], {
+      month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute:'2-digit'
+  });
+
   return (
     <Provider>
     <View style={styles.container}>
-      {/* HEADER */}
       <View style={styles.header}>
         <IconButton icon="arrow-left" size={24} onPress={() => navigation.goBack()} />
         <Text style={styles.headerTitle}>Booking Details</Text>
@@ -132,7 +131,7 @@ export default function BookingDetailScreen() {
 
       <ScrollView contentContainerStyle={styles.content}>
         
-        {/* STATUS BANNER */}
+        {/* STATUS CARD */}
         <Surface style={styles.statusCard} elevation={2}>
              <Chip 
                 textStyle={{color: 'white', fontWeight: 'bold'}}
@@ -148,7 +147,11 @@ export default function BookingDetailScreen() {
                 {new Date(booking.slot_start).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
             </Text>
 
-            {/* If Cancelled/Rejected, show REASON */}
+            {/* --- NEW: BOOKED ON TIMESTAMP --- */}
+            <Text style={styles.bookedOnText}>
+                Booked on: {bookedOn}
+            </Text>
+
             {(booking.status === 'cancelled' || booking.status === 'rejected') && booking.cancellation_reason && (
                 <View style={styles.reasonBox}>
                     <Text style={{fontWeight: 'bold', color: Colors.error}}>Reason:</Text>
@@ -254,13 +257,13 @@ const styles = StyleSheet.create({
   statusCard: { padding: 20, borderRadius: 12, backgroundColor: 'white', alignItems: 'center', marginBottom: 20 },
   dateText: { fontSize: 18, fontWeight: '600', color: Colors.text, marginTop: 5 },
   timeText: { fontSize: 32, fontWeight: 'bold', color: Colors.primary, marginVertical: 5 },
+  bookedOnText: { fontSize: 12, color: 'gray', marginTop: 5, fontStyle: 'italic' }, // <--- NEW STYLE
   reasonBox: { marginTop: 15, padding: 10, backgroundColor: '#FFF5F5', borderRadius: 8, width: '100%' },
 
   card: { marginBottom: 15, backgroundColor: 'white', borderRadius: 12 },
   sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 10, color: Colors.text },
   row: { flexDirection: 'row', justifyContent: 'space-between' },
 
-  // Modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 },
   modalContent: { backgroundColor: 'white', padding: 25, borderRadius: 15, elevation: 5 },
   modalTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 10 },
