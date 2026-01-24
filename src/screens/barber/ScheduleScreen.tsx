@@ -38,23 +38,25 @@ export default function ScheduleScreen() {
   };
 
   const handleSlotPress = async (item: any) => {
-    // 1. PAST TIME CHECK
-    const now = new Date();
-    const slotTime = new Date(item.slot_time);
-    
-    // If date is today and time is past, OR date is before today
-    if (slotTime < now) {
-        Alert.alert("Past Time", "You cannot edit schedules in the past.");
-        return;
-    }
-
-    // 2. IF BOOKED -> SHOW DETAILS
+    // 1. PRIORITY CHECK: Is it a Booking? 
+    // If yes, open details immediately, even if it's in the past.
     if (item.status === 'busy' || item.status === 'accepted') {
         openBookingDetails(item);
         return;
     }
 
-    // 3. IF FREE/UNAVAILABLE -> TOGGLE
+    // 2. SECONDARY CHECK: Is it in the Past?
+    // If it's NOT a booking (just an empty slot), reject edits in the past.
+    const now = new Date();
+    const slotTime = new Date(item.slot_time);
+    
+    if (slotTime < now) {
+        // Optional: We can just return silently, or show a toast.
+        // Alert.alert("Past Time", "You cannot edit schedules in the past.");
+        return;
+    }
+
+    // 3. IF FREE/UNAVAILABLE (and in future) -> TOGGLE
     toggleSlot(item.slot_time, item.status);
   };
 
@@ -83,16 +85,14 @@ export default function ScheduleScreen() {
 
   // --- BOOKING DETAILS LOGIC ---
   const openBookingDetails = async (slotItem: any) => {
-    // Fetch full booking details (Phone, etc)
-    // We assume the slotItem has the booking_id implicitly or we query by time
-    // Since get_barber_schedule might not return booking_id, we search by time & barber
+    // We fetch details using the slot time + barber ID
     const { data, error } = await supabase
         .from('bookings')
         .select('*, profiles:customer_id(full_name, phone)')
         .eq('barber_id', userProfile?.id)
         .eq('slot_start', slotItem.slot_time)
-        .eq('status', 'accepted')
-        .single();
+        .in('status', ['accepted', 'completed']) // Include 'completed' if you have that status for past jobs
+        .maybeSingle(); // Use maybeSingle to prevent crashing if multiple rows exist (though they shouldn't)
 
     if (data) {
         setSelectedBooking(data);
@@ -100,7 +100,9 @@ export default function ScheduleScreen() {
         setShowCancelInput(false);
         setCancelReason('');
     } else {
-        Alert.alert("Error", "Could not load booking details.");
+        // Fallback: If we can't find the booking row but the slot says "booked"
+        // It might be a data sync issue or a different status.
+        Alert.alert("Notice", "Could not load full details for this past booking.");
     }
   };
 
@@ -171,11 +173,12 @@ export default function ScheduleScreen() {
             };
         case 'busy': 
         case 'accepted':
+            // FIX: Even if past, show as active/colored so it looks clickable
             return { 
                 color: Colors.primary, 
                 bg: '#EFF6FF', 
                 icon: 'account', 
-                label: 'Booked',
+                label: isPast ? 'COMPLETED' : 'BOOKED',
                 subLabel: item.customer_name || 'Customer'
             };
         default: return { color: 'black', bg: 'white', icon: 'help', label: 'Unknown', subLabel: '' };
@@ -207,10 +210,15 @@ export default function ScheduleScreen() {
             const config = getStatusConfig(item);
             const timeLabel = new Date(item.slot_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
             const isLast = index === slots.length - 1;
+            
+            // Logic: Dim opacity for PAST items ONLY if they are NOT booked.
+            // If booked, keep full opacity so they look clickable.
             const isPast = new Date(item.slot_time) < new Date();
+            const isBooked = item.status === 'busy' || item.status === 'accepted';
+            const rowOpacity = (isPast && !isBooked) ? 0.5 : 1.0;
 
             return (
-              <View style={[styles.timelineRow, isPast && {opacity: 0.6}]}>
+              <View style={[styles.timelineRow, {opacity: rowOpacity}]}>
                 <View style={styles.timeCol}>
                     <Text style={styles.timeText}>{timeLabel}</Text>
                 </View>
@@ -255,6 +263,10 @@ export default function ScheduleScreen() {
                         <Text style={styles.modalSubtitle}>
                             {selectedBooking ? new Date(selectedBooking.slot_start).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : ''}
                         </Text>
+                        {/* New: Show date for context if it's a past booking */}
+                        <Text style={{color:'gray', fontSize:12}}>
+                            {selectedBooking ? new Date(selectedBooking.slot_start).toDateString() : ''}
+                        </Text>
                     </View>
 
                     {!showCancelInput ? (
@@ -270,13 +282,21 @@ export default function ScheduleScreen() {
 
                             <Divider style={{marginVertical: 20}} />
 
-                            <Button 
-                                mode="contained" 
-                                buttonColor={Colors.error} 
-                                onPress={() => setShowCancelInput(true)}
-                            >
-                                Cancel Booking
-                            </Button>
+                            {/* Only show Cancel button if it's in the FUTURE */}
+                            {selectedBooking && new Date(selectedBooking.slot_start) > new Date() ? (
+                                <Button 
+                                    mode="contained" 
+                                    buttonColor={Colors.error} 
+                                    onPress={() => setShowCancelInput(true)}
+                                >
+                                    Cancel Booking
+                                </Button>
+                            ) : (
+                                <Text style={{textAlign:'center', color:'gray', fontStyle:'italic'}}>
+                                    This appointment has passed.
+                                </Text>
+                            )}
+
                             <Button onPress={() => setDetailModalVisible(false)} style={{marginTop: 10}}>
                                 Close
                             </Button>
@@ -332,7 +352,6 @@ const styles = StyleSheet.create({
   statusLabel: { fontSize: 10, fontWeight: 'bold', letterSpacing: 1, marginBottom: 2 },
   customerName: { fontSize: 15, fontWeight: '600', color: Colors.text },
 
-  // Modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: 'white', padding: 25, borderTopLeftRadius: 20, borderTopRightRadius: 20 },
   modalTitle: { fontSize: 22, fontWeight: 'bold', marginTop: 10 },
