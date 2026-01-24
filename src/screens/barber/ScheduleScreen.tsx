@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
-import { View, StyleSheet, FlatList, TouchableOpacity, Alert, Platform } from 'react-native';
-import { Text, IconButton, ActivityIndicator, Chip, Divider, Surface } from 'react-native-paper';
-import { useFocusEffect } from '@react-navigation/native'; // <--- NEW: Auto-refresh
+import { View, StyleSheet, FlatList, TouchableOpacity, Alert, Modal, Linking, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { Text, IconButton, ActivityIndicator, Surface, Button, Avatar, Divider, Provider, Portal } from 'react-native-paper';
+import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../../services/supabase';
 import { useAuth } from '../../auth/AuthContext';
 import { Colors } from '../../config/colors';
@@ -13,33 +13,52 @@ export default function ScheduleScreen() {
   const [slots, setSlots] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // 1. AUTO-REFRESH: Runs every time this tab is focused OR date changes
+  // Modal State
+  const [selectedBooking, setSelectedBooking] = useState<any>(null);
+  const [detailModalVisible, setDetailModalVisible] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelling, setCancelling] = useState(false);
+  const [showCancelInput, setShowCancelInput] = useState(false);
+
   useFocusEffect(
     useCallback(() => {
       fetchSchedule();
-    }, [selectedDate]) // Re-run when date changes
+    }, [selectedDate])
   );
 
   const fetchSchedule = async (silent = false) => {
     if (!silent) setLoading(true);
-    
     const dateStr = selectedDate.toISOString().split('T')[0];
-    
     const { data } = await supabase.rpc('get_barber_schedule', {
       p_barber_id: userProfile?.id,
       p_date: dateStr
     });
-
     if (data) setSlots(data);
     if (!silent) setLoading(false);
   };
 
-  const handleToggleSlot = async (slotTime: string, currentStatus: string) => {
-    if (currentStatus === 'busy' || currentStatus === 'requested') {
-      Alert.alert("Booked Slot", "This time is booked by a customer. Go to Dashboard to manage/cancel it.");
-      return;
+  const handleSlotPress = async (item: any) => {
+    // 1. PAST TIME CHECK
+    const now = new Date();
+    const slotTime = new Date(item.slot_time);
+    
+    // If date is today and time is past, OR date is before today
+    if (slotTime < now) {
+        Alert.alert("Past Time", "You cannot edit schedules in the past.");
+        return;
     }
 
+    // 2. IF BOOKED -> SHOW DETAILS
+    if (item.status === 'busy' || item.status === 'accepted') {
+        openBookingDetails(item);
+        return;
+    }
+
+    // 3. IF FREE/UNAVAILABLE -> TOGGLE
+    toggleSlot(item.slot_time, item.status);
+  };
+
+  const toggleSlot = async (slotTime: string, currentStatus: string) => {
     // Optimistic Update
     const originalSlots = [...slots];
     setSlots(prev => prev.map(s => {
@@ -49,36 +68,98 @@ export default function ScheduleScreen() {
         return s;
     }));
 
-    // Call Backend
     const { error } = await supabase.rpc('toggle_slot_availability', {
         p_barber_id: userProfile?.id,
         p_slot_time: slotTime
     });
 
     if (error) {
-        setSlots(originalSlots); // Revert
+        setSlots(originalSlots);
         Alert.alert("Error", error.message);
     } else {
-        fetchSchedule(true); // Silent Refresh
+        fetchSchedule(true);
     }
   };
 
+  // --- BOOKING DETAILS LOGIC ---
+  const openBookingDetails = async (slotItem: any) => {
+    // Fetch full booking details (Phone, etc)
+    // We assume the slotItem has the booking_id implicitly or we query by time
+    // Since get_barber_schedule might not return booking_id, we search by time & barber
+    const { data, error } = await supabase
+        .from('bookings')
+        .select('*, profiles:customer_id(full_name, phone)')
+        .eq('barber_id', userProfile?.id)
+        .eq('slot_start', slotItem.slot_time)
+        .eq('status', 'accepted')
+        .single();
+
+    if (data) {
+        setSelectedBooking(data);
+        setDetailModalVisible(true);
+        setShowCancelInput(false);
+        setCancelReason('');
+    } else {
+        Alert.alert("Error", "Could not load booking details.");
+    }
+  };
+
+  const handleCall = () => {
+      const phone = selectedBooking?.profiles?.phone;
+      if (phone) Linking.openURL(`tel:${phone}`);
+      else Alert.alert("No Phone", "Customer phone number not available.");
+  };
+
+  const handleWhatsApp = () => {
+    const phone = selectedBooking?.profiles?.phone;
+    if (phone) Linking.openURL(`whatsapp://send?phone=${phone}&text=Hi, regarding your appointment...`);
+    else Alert.alert("No Phone", "Customer phone number not available.");
+  };
+
+  const confirmCancellation = async () => {
+      if (!cancelReason.trim()) {
+          Alert.alert("Reason Required", "Please enter a reason for cancellation.");
+          return;
+      }
+      setCancelling(true);
+      
+      const { error } = await supabase
+          .from('bookings')
+          .update({ 
+              status: 'cancelled', 
+              cancellation_reason: cancelReason 
+          })
+          .eq('id', selectedBooking.id);
+
+      setCancelling(false);
+      
+      if (error) {
+          Alert.alert("Error", error.message);
+      } else {
+          Alert.alert("Cancelled", "Booking has been cancelled.");
+          setDetailModalVisible(false);
+          fetchSchedule(true); // Refresh
+      }
+  };
+
+  // --- VISUAL HELPERS ---
   const changeDate = (days: number) => {
     const newDate = new Date(selectedDate);
     newDate.setDate(newDate.getDate() + days);
     setSelectedDate(newDate);
   };
 
-  // --- VISUAL HELPERS ---
   const getStatusConfig = (item: any) => {
+    const isPast = new Date(item.slot_time) < new Date();
+    
     switch (item.status) {
         case 'free': 
             return { 
-                color: Colors.success, 
-                bg: '#ECFDF5', 
+                color: isPast ? '#9CA3AF' : Colors.success, 
+                bg: isPast ? '#F3F4F6' : '#ECFDF5', 
                 icon: 'check-circle-outline', 
                 label: 'Available',
-                subLabel: 'Tap to Block'
+                subLabel: isPast ? 'Past' : 'Tap to Block'
             };
         case 'unavailable': 
             return { 
@@ -86,7 +167,7 @@ export default function ScheduleScreen() {
                 bg: '#F3F4F6', 
                 icon: 'cancel', 
                 label: 'Blocked',
-                subLabel: 'Tap to Open'
+                subLabel: isPast ? 'Past' : 'Tap to Open'
             };
         case 'busy': 
         case 'accepted':
@@ -97,21 +178,14 @@ export default function ScheduleScreen() {
                 label: 'Booked',
                 subLabel: item.customer_name || 'Customer'
             };
-        case 'requested': 
-            return { 
-                color: '#D97706', 
-                bg: '#FFFBEB', 
-                icon: 'clock-outline', 
-                label: 'Request',
-                subLabel: 'Check Dashboard'
-            };
         default: return { color: 'black', bg: 'white', icon: 'help', label: 'Unknown', subLabel: '' };
     }
   };
 
   return (
+    <Provider>
     <View style={styles.container}>
-      {/* --- CALENDAR HEADER --- */}
+      {/* HEADER */}
       <Surface style={styles.header} elevation={2}>
         <View style={styles.headerRow}>
             <IconButton icon="chevron-left" size={30} onPress={() => changeDate(-1)} />
@@ -123,7 +197,7 @@ export default function ScheduleScreen() {
         </View>
       </Surface>
 
-      {/* --- TIMELINE LIST --- */}
+      {/* TIMELINE */}
       {loading ? <ActivityIndicator style={{marginTop: 50}} color={Colors.primary} /> : (
         <FlatList
           data={slots}
@@ -133,24 +207,20 @@ export default function ScheduleScreen() {
             const config = getStatusConfig(item);
             const timeLabel = new Date(item.slot_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
             const isLast = index === slots.length - 1;
+            const isPast = new Date(item.slot_time) < new Date();
 
             return (
-              <View style={styles.timelineRow}>
-                {/* 1. Time Column */}
+              <View style={[styles.timelineRow, isPast && {opacity: 0.6}]}>
                 <View style={styles.timeCol}>
                     <Text style={styles.timeText}>{timeLabel}</Text>
                 </View>
-
-                {/* 2. Timeline Line & Dot */}
                 <View style={styles.lineCol}>
                     <View style={[styles.dot, { backgroundColor: config.color }]} />
                     {!isLast && <View style={styles.line} />}
                 </View>
-
-                {/* 3. Card Content */}
                 <TouchableOpacity 
                     style={{flex: 1}} 
-                    onPress={() => handleToggleSlot(item.slot_time, item.status)}
+                    onPress={() => handleSlotPress(item)}
                     activeOpacity={0.7}
                 >
                     <View style={[styles.card, { backgroundColor: config.bg, borderColor: config.color + '40' }]}>
@@ -173,36 +243,101 @@ export default function ScheduleScreen() {
           }}
         />
       )}
+
+      {/* --- BOOKING DETAIL MODAL --- */}
+      <Portal>
+          <Modal visible={detailModalVisible} transparent animationType="slide" onRequestClose={() => setDetailModalVisible(false)}>
+            <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalOverlay}>
+                <View style={styles.modalContent}>
+                    <View style={{alignItems: 'center', marginBottom: 20}}>
+                        <Avatar.Icon size={60} icon="account" backgroundColor={Colors.secondary} />
+                        <Text style={styles.modalTitle}>{selectedBooking?.profiles?.full_name || "Customer"}</Text>
+                        <Text style={styles.modalSubtitle}>
+                            {selectedBooking ? new Date(selectedBooking.slot_start).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : ''}
+                        </Text>
+                    </View>
+
+                    {!showCancelInput ? (
+                        <>
+                            <View style={styles.actionRow}>
+                                <Button mode="outlined" icon="phone" onPress={handleCall} style={styles.actionBtn}>
+                                    Call
+                                </Button>
+                                <Button mode="outlined" icon="whatsapp" onPress={handleWhatsApp} style={styles.actionBtn} textColor="#25D366">
+                                    WhatsApp
+                                </Button>
+                            </View>
+
+                            <Divider style={{marginVertical: 20}} />
+
+                            <Button 
+                                mode="contained" 
+                                buttonColor={Colors.error} 
+                                onPress={() => setShowCancelInput(true)}
+                            >
+                                Cancel Booking
+                            </Button>
+                            <Button onPress={() => setDetailModalVisible(false)} style={{marginTop: 10}}>
+                                Close
+                            </Button>
+                        </>
+                    ) : (
+                        <>
+                            <Text style={{fontWeight: 'bold', marginBottom: 10}}>Cancellation Reason:</Text>
+                            <TextInput 
+                                placeholder="e.g. Emergency, Shop closed..."
+                                style={styles.input}
+                                value={cancelReason}
+                                onChangeText={setCancelReason}
+                                autoFocus
+                            />
+                            <View style={{flexDirection: 'row', justifyContent: 'space-between', marginTop: 15}}>
+                                <Button onPress={() => setShowCancelInput(false)}>Back</Button>
+                                <Button mode="contained" buttonColor={Colors.error} onPress={confirmCancellation} loading={cancelling}>
+                                    Confirm Cancel
+                                </Button>
+                            </View>
+                        </>
+                    )}
+                </View>
+            </KeyboardAvoidingView>
+          </Modal>
+      </Portal>
+
     </View>
+    </Provider>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: 'white' },
-  
-  // Header
   header: { backgroundColor: 'white', paddingVertical: 10, paddingTop: 50, borderBottomLeftRadius: 20, borderBottomRightRadius: 20 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 10 },
   dateDay: { fontSize: 14, fontWeight: '600', color: 'gray', textTransform: 'uppercase' },
   dateDate: { fontSize: 20, fontWeight: 'bold', color: Colors.text },
 
-  // Timeline
   timelineRow: { flexDirection: 'row', marginBottom: 5 },
   timeCol: { width: 70, alignItems: 'flex-end', paddingRight: 10, paddingTop: 10 },
   timeText: { fontWeight: 'bold', color: '#555' },
-  
   lineCol: { width: 20, alignItems: 'center' },
   dot: { width: 12, height: 12, borderRadius: 6, marginTop: 14, zIndex: 1 },
   line: { width: 2, backgroundColor: '#E5E7EB', flex: 1, position: 'absolute', top: 14, bottom: -14 },
-
-  // Card
+  
   card: { 
       flex: 1, flexDirection: 'row', alignItems: 'center', 
       padding: 12, borderRadius: 12, borderWidth: 1,
       marginBottom: 10, marginLeft: 5,
-      // Shadow for depth
       shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1
   },
   statusLabel: { fontSize: 10, fontWeight: 'bold', letterSpacing: 1, marginBottom: 2 },
   customerName: { fontSize: 15, fontWeight: '600', color: Colors.text },
+
+  // Modal
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: 'white', padding: 25, borderTopLeftRadius: 20, borderTopRightRadius: 20 },
+  modalTitle: { fontSize: 22, fontWeight: 'bold', marginTop: 10 },
+  modalSubtitle: { fontSize: 16, color: 'gray' },
+  actionRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 },
+  actionBtn: { flex: 0.48, borderColor: '#ddd' },
+  input: { borderWidth: 1, borderColor: '#ccc', borderRadius: 8, padding: 10, backgroundColor: '#f9f9f9' }
 });
