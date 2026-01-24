@@ -219,15 +219,21 @@ export default function DashboardScreen() {
       </View>
 
       <View style={styles.content}>
-        {/* STATS */}
+        {/* STATS LINKED TO EARNINGS SCREEN */}
         <View style={styles.statsRow}>
-          <Card style={styles.statCard} onPress={() => console.log("Navigate to Earnings")}>
+          <Card 
+            style={styles.statCard} 
+            onPress={() => navigation.navigate('EarningsHistory', { initialFilter: 'Today' })}
+          >
             <Card.Content>
               <Text style={styles.statLabel}>Today's Earnings</Text>
               <Text style={styles.statValue}>${stats.todayEarnings}</Text>
             </Card.Content>
           </Card>
-          <Card style={styles.statCard} onPress={() => console.log("Navigate to Jobs Done")}>
+          <Card 
+            style={styles.statCard} 
+            onPress={() => navigation.navigate('EarningsHistory', { initialFilter: 'All' })}
+          >
             <Card.Content>
               <Text style={styles.statLabel}>Jobs Done</Text>
               <Text style={styles.statValue}>{stats.jobsDone}</Text>

@@ -18,7 +18,8 @@ import BookingScreen from '../screens/customer/BookingScreen';
 import MyBookingsScreen from '../screens/customer/MyBookingsScreen';
 import ProfileScreen from '../screens/common/ProfileScreen';
 import BookingDetailScreen from '../screens/customer/BookingDetailScreen'; 
-import ReceiptBuilderScreen from '../screens/barber/ReceiptBuilderScreen'; // <--- Imported
+import ReceiptBuilderScreen from '../screens/barber/ReceiptBuilderScreen'; 
+import EarningsHistoryScreen from '../screens/barber/EarningsHistoryScreen';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -40,13 +41,12 @@ export default function RootNavigator() {
         {!session ? (
           <Stack.Screen name="Login" component={LoginScreen} />
         ) : isBarber ? (
-          // --- BARBER STACK ---
           <>
             <Stack.Screen name="BarberApp" component={BarberTabs} />
             <Stack.Screen name="ReceiptBuilder" component={ReceiptBuilderScreen} />
+            <Stack.Screen name="EarningsHistory" component={EarningsHistoryScreen} />
           </>
         ) : (
-          // --- CUSTOMER STACK ---
           <>
             <Stack.Screen name="CustomerApp" component={CustomerTabs} />
             <Stack.Screen name="Booking" component={BookingScreen} />
