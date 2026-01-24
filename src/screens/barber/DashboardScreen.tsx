@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { View, StyleSheet, ScrollView, Alert, RefreshControl, TouchableOpacity } from 'react-native';
 import { Text, Card, Button, Switch, Chip, Avatar } from 'react-native-paper';
 import { supabase } from '../../services/supabase';
@@ -6,20 +6,30 @@ import { useAuth } from '../../auth/AuthContext';
 import { Colors } from '../../config/colors';
 import { Strings } from '../../config/strings';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import BookingAlertModal from '../../components/BookingAlertModal'; // <--- IMPORT
+import BookingAlertModal from '../../components/BookingAlertModal'; 
 
 export default function DashboardScreen() {
   const { userProfile, signOut } = useAuth(); 
+  
+  // State
   const [isOnline, setIsOnline] = useState(true);
   const [requests, setRequests] = useState<any[]>([]);
   const [stats, setStats] = useState({ todayEarnings: 0, jobsDone: 0 });
   const [loading, setLoading] = useState(true);
 
-  // NEW STATE FOR ALARM
+  // Alarm State
   const [incomingRequest, setIncomingRequest] = useState<any>(null);
   const [modalVisible, setModalVisible] = useState(false);
 
-  // 1. Load Initial Data
+  // REF: To track "Online" status inside the Realtime Listener without re-subscribing
+  const isOnlineRef = useRef(isOnline);
+
+  // 1. Keep Ref in sync with State
+  useEffect(() => {
+    isOnlineRef.current = isOnline;
+  }, [isOnline]);
+
+  // 2. Load Initial Data
   useEffect(() => {
     if (userProfile?.id) {
       fetchDashboardData();
@@ -30,6 +40,7 @@ export default function DashboardScreen() {
 
   const fetchDashboardData = async () => {
     setLoading(true);
+    
     // Get Shop Status
     const { data: shop } = await supabase
       .from('shops')
@@ -39,12 +50,13 @@ export default function DashboardScreen() {
     
     if (shop) setIsOnline(shop.is_open);
 
-    // Get Pending Requests
+    // Get Pending Requests (SORTED BY NEWEST CREATED)
     const { data: pending } = await supabase
       .from('bookings')
       .select('*, profiles:customer_id(full_name)')
       .eq('barber_id', userProfile!.id)
-      .eq('status', 'requested'); 
+      .eq('status', 'requested')
+      .order('created_at', { ascending: false }); // <--- FIX 1: Sort by "Most Recent Request"
     
     if (pending) setRequests(pending);
 
@@ -62,22 +74,28 @@ export default function DashboardScreen() {
     setLoading(false);
   };
 
-  // 2. Real-Time Listener (The Alarm Trigger)
+  // 3. Real-Time Listener (The Alarm Trigger)
   const subscribeToBookings = () => {
     const channel = supabase
       .channel('barber-dashboard')
       .on(
         'postgres_changes',
         {
-          event: 'INSERT', // Listen for NEW bookings
+          event: 'INSERT', 
           schema: 'public',
           table: 'bookings',
           filter: `barber_id=eq.${userProfile!.id}`
         },
         async (payload) => {
-          console.log("New Booking Received!", payload);
+          console.log("New Booking Signal Received");
+
+          // CHECK 1: Are we Online? (Using Ref for live value)
+          if (!isOnlineRef.current) {
+              console.log("Ignored: Shop is Offline");
+              return; 
+          }
           
-          // Fetch full details (Customer Name) to show in Modal
+          // Fetch full details
           const { data } = await supabase
             .from('bookings')
             .select('*, profiles:customer_id(full_name)')
@@ -85,9 +103,15 @@ export default function DashboardScreen() {
             .single();
             
           if (data) {
+             // CHECK 2: Is this actually a REQUEST? (Fixes self-blocking alarm)
+             if (data.status !== 'requested') {
+                 console.log("Ignored: Status is", data.status);
+                 return;
+             }
+
              setIncomingRequest(data);
-             setModalVisible(true); // <--- OPEN THE ALARM
-             fetchDashboardData(); // Refresh list behind the modal
+             setModalVisible(true); 
+             fetchDashboardData(); 
           }
         }
       )
@@ -97,13 +121,13 @@ export default function DashboardScreen() {
   };
 
   const toggleOnline = async (val: boolean) => {
-    setIsOnline(val);
+    setIsOnline(val); // UI updates instantly
+    // DB update happens in background
     await supabase.from('shops').update({ is_open: val }).eq('owner_id', userProfile!.id);
   };
 
-  // 3. Actions (Accept/Reject)
   const handleBookingAction = async (bookingId: string, action: 'accept' | 'reject') => {
-    setModalVisible(false); // Close modal if open
+    setModalVisible(false);
 
     const newStatus = action === 'accept' ? 'accepted' : 'rejected';
     setLoading(true);
@@ -124,7 +148,7 @@ export default function DashboardScreen() {
             Alert.alert("Notice", msg);
         }
         
-        // Refresh everything
+        // Optimistic Update
         setRequests(prev => prev.filter(r => r.id !== bookingId));
         fetchDashboardData();
 
@@ -140,7 +164,7 @@ export default function DashboardScreen() {
       style={styles.container} 
       refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchDashboardData} />}
     >
-      {/* --- THE ALARM MODAL --- */}
+      {/* ALARM MODAL */}
       <BookingAlertModal 
         visible={modalVisible} 
         booking={incomingRequest}
