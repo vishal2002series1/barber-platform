@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "523685498732",
+    "project_id": "adsmadesense",
+    "storage_bucket": "adsmadesense.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:523685498732:android:7b8f53e4869b26cf63ed49",
+        "android_client_info": {
+          "package_name": "com.vishal2002series.barberplatform"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "523685498732-rrd2n34vnsb9k8qbi0ffv1fb9so0gndm.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.vishal2002series.barberplatform",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
+          "client_id": "523685498732-ekm07ptsdm6hug1h9p34lupl2sosekp4.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDEs2ORnB6GUg5BQEVibnTL4lk0mRY5IMU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "523685498732-ekm07ptsdm6hug1h9p34lupl2sosekp4.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "523685498732-vvqc6qvf4b3a6s6d8dtnclvb3qarpdjf.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.vishal2002series.barberplatform"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

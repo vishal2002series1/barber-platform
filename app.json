@@ -13,15 +13,24 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.vishal2002series.barberplatform",
+      "googleServicesFile": "./GoogleService-Info.plist"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
+      "package": "com.vishal2002series.barberplatform",
+      "googleServicesFile": "./google-services.json",
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyBONFo4V5r4oHCJFE037npSmOpm5u_FWas"
+        }
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -31,6 +40,24 @@
         "projectId": "7e27632f-f491-40e1-b268-4ef4a2e50ebe"
       }
     },
-    "owner": "vishal2002series"
+    "owner": "vishal2002series",
+    "plugins": [
+      "@react-native-google-signin/google-signin",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "useFrameworks": "static"
+          }
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#ffffff"
+        }
+      ]
+    ]
   }
 }
