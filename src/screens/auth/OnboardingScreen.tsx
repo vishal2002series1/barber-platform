@@ -32,58 +32,58 @@ export default function OnboardingScreen() {
 
   // --- 1. BULLETPROOF IMAGE UPLOAD (Fixes Base64 Error) ---
   // --- 1. BULLETPROOF IMAGE UPLOAD (Actually works on Android) ---
-const uploadImageRobust = async (uri: string): Promise<string> => {
-    const ext = uri.substring(uri.lastIndexOf('.') + 1);
-    const fileName = `${Date.now()}.${ext}`;
+// const uploadImageRobust = async (uri: string): Promise<string> => {
+//     const ext = uri.substring(uri.lastIndexOf('.') + 1);
+//     const fileName = `${Date.now()}.${ext}`;
   
-    try {
-      console.log("Starting upload for:", uri);
+//     try {
+//       console.log("Starting upload for:", uri);
   
-      // Method 1: XMLHttpRequest (Most reliable on Android)
-      const blob = await new Promise<Blob>((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.onload = function() {
-          resolve(xhr.response);
-        };
-        xhr.onerror = function(e) {
-          console.log("XHR Error:", e);
-          reject(new TypeError('Network request failed'));
-        };
-        xhr.responseType = 'blob';
-        xhr.open('GET', uri, true);
-        xhr.send(null);
-      });
+//       // Method 1: XMLHttpRequest (Most reliable on Android)
+//       const blob = await new Promise<Blob>((resolve, reject) => {
+//         const xhr = new XMLHttpRequest();
+//         xhr.onload = function() {
+//           resolve(xhr.response);
+//         };
+//         xhr.onerror = function(e) {
+//           console.log("XHR Error:", e);
+//           reject(new TypeError('Network request failed'));
+//         };
+//         xhr.responseType = 'blob';
+//         xhr.open('GET', uri, true);
+//         xhr.send(null);
+//       });
   
-      console.log("Blob created, size:", blob.size);
+//       console.log("Blob created, size:", blob.size);
   
-      // 2. Upload to Supabase
-      const { data, error } = await supabase.storage
-        .from('avatars')
-        .upload(fileName, blob, {
-          contentType: `image/${ext === 'jpg' ? 'jpeg' : ext}`,
-          upsert: false
-        });
+//       // 2. Upload to Supabase
+//       const { data, error } = await supabase.storage
+//         .from('avatars')
+//         .upload(fileName, blob, {
+//           contentType: `image/${ext === 'jpg' ? 'jpeg' : ext}`,
+//           upsert: false
+//         });
   
-      if (error) {
-        console.log("Supabase error:", error);
-        throw error;
-      }
+//       if (error) {
+//         console.log("Supabase error:", error);
+//         throw error;
+//       }
   
-      console.log("Upload successful:", data);
+//       console.log("Upload successful:", data);
   
-      // 3. Get Public URL
-      const { data: urlData } = supabase.storage
-        .from('avatars')
-        .getPublicUrl(fileName);
+//       // 3. Get Public URL
+//       const { data: urlData } = supabase.storage
+//         .from('avatars')
+//         .getPublicUrl(fileName);
   
-      console.log("Public URL:", urlData.publicUrl);
-      return urlData.publicUrl;
+//       console.log("Public URL:", urlData.publicUrl);
+//       return urlData.publicUrl;
   
-    } catch (error: any) {
-      console.error("Upload Logic Error:", error);
-      throw error;
-    }
-  }; 
+//     } catch (error: any) {
+//       console.error("Upload Logic Error:", error);
+//       throw error;
+//     }
+//   }; 
 
   const pickShopImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -144,7 +144,6 @@ const uploadImageRobust = async (uri: string): Promise<string> => {
 
     setLoading(true);
     try {
-      // Prepare JSON for Services
       const servicesJson = role === 'barber' ? services.map(s => ({
         name: s.name,
         price: parseFloat(s.price),
@@ -163,9 +162,12 @@ const uploadImageRobust = async (uri: string): Promise<string> => {
 
       if (error) throw error;
       
-      Alert.alert("Success!", "Setup complete.", [
-        { text: "OK", onPress: () => {} } // AuthContext should auto-refresh
-      ]);
+      // SUCCESS: Alert the user and then Sign Out to force them back to Login
+      Alert.alert(
+        "Setup Complete", 
+        "Your profile is ready! Please login again to start using the app.",
+        [{ text: "OK", onPress: () => signOut() }] // This clears the session and closes the screen
+      );
 
     } catch (error: any) {
       Alert.alert("Setup Error", error.message);

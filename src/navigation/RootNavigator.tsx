@@ -29,7 +29,7 @@ export default function RootNavigator() {
   // Grab userProfile to check the 'is_onboarded' flag
   const { session, loading, isBarber, userProfile } = useAuth();
 
-  if (loading) {
+  if (loading || (session && !userProfile)) {
     return (
       <View style={{flex: 1, justifyContent: 'center', alignItems: 'center'}}>
         <ActivityIndicator size="large" color={Colors.primary} />

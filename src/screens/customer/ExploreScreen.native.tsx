@@ -103,6 +103,7 @@ export default function ExploreScreen() {
   };
 
   // --- RENDER MAP VIEW ---
+  // --- RENDER MAP VIEW ---
   const renderMap = () => (
     <MapView
       style={styles.map}
@@ -114,29 +115,12 @@ export default function ExploreScreen() {
       {shops.map((shop) => (
         shop.latitude && shop.longitude ? (
           <Marker
-            key={shop.id}
-            coordinate={{ latitude: shop.latitude, longitude: shop.longitude }}
-            title={shop.shop_name}
-          >
-            {/* Custom Callout with Rating */}
-            <Callout onPress={() => handleShopPress(shop)}>
-              <View style={styles.callout}>
-                <Text style={styles.calloutTitle}>{shop.shop_name}</Text>
-                <View style={{flexDirection: 'row', alignItems: 'center', marginVertical: 4}}>
-                    <MaterialCommunityIcons name="star" size={14} color="#FFB100" />
-                    <Text style={{fontWeight: 'bold', fontSize: 12, marginLeft: 2}}>
-                        {shop.rating ? shop.rating.toFixed(1) : "New"}
-                    </Text>
-                    {shop.dist_meters && (
-                        <Text style={{color: 'gray', fontSize: 12, marginLeft: 8}}>
-                           • {getDistanceLabel(shop.dist_meters)}
-                        </Text>
-                    )}
-                </View>
-                <Text style={{ color: Colors.primary, fontSize: 12, fontWeight: 'bold' }}>Tap to Book</Text>
-              </View>
-            </Callout>
-          </Marker>
+  key={shop.id}
+  coordinate={{ latitude: shop.latitude, longitude: shop.longitude }}
+  title={shop.shop_name}
+  description={`⭐ ${shop.rating ? shop.rating.toFixed(1) : "New"} ${shop.dist_meters ? `• ${getDistanceLabel(shop.dist_meters)} away` : ""}`}
+  onCalloutPress={() => handleShopPress(shop)}
+/>
         ) : null
       ))}
     </MapView>
@@ -238,8 +222,41 @@ const styles = StyleSheet.create({
   
   // Map Styles
   map: { width: Dimensions.get('window').width, flex: 1 },
-  callout: { width: 150, padding: 5, alignItems: 'center' },
-  calloutTitle: { fontWeight: 'bold', marginBottom: 2 },
+  // callout: { width: 150, padding: 5, alignItems: 'center' },
+  // calloutTitle: { fontWeight: 'bold', marginBottom: 2 },
+
+  // calloutContainer: {
+  //   backgroundColor: 'white',
+  //   borderRadius: 8,
+  //   padding: 0,
+  //   elevation: 4,
+  // },
+  
+  // callout: {
+  //   width: 160,
+  //   padding: 8,
+  //   alignItems: 'center',
+  // },
+
+  customCallout: {
+    backgroundColor: 'white',
+    borderRadius: 8,
+    padding: 12,
+    minWidth: 180,
+    maxWidth: 220,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  
+  calloutTitle: { 
+    fontWeight: 'bold', 
+    fontSize: 14, 
+    marginBottom: 4,
+    color: Colors.text 
+  },
 
   // List Styles
   card: { marginBottom: 16, borderRadius: 12, overflow: 'hidden', backgroundColor: 'white', elevation: 3 },
