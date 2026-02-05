@@ -7,4 +7,5 @@ export interface UserProfile {
   phone: string | null;
   role: UserRole;
   avatar_url?: string | null;
+  is_onboarded?: boolean;
 }

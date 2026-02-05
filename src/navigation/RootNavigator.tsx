@@ -10,6 +10,7 @@ import { Colors } from '../config/colors';
 
 // Import Screens
 import LoginScreen from '../screens/auth/LoginScreen';
+import OnboardingScreen from '../screens/auth/OnboardingScreen'; // <--- IMPORT NEW SCREEN
 import DashboardScreen from '../screens/barber/DashboardScreen';
 import ServicesScreen from '../screens/barber/ServicesScreen';
 import ScheduleScreen from '../screens/barber/ScheduleScreen';
@@ -25,7 +26,8 @@ const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 
 export default function RootNavigator() {
-  const { session, loading, isBarber } = useAuth();
+  // Grab userProfile to check the 'is_onboarded' flag
+  const { session, loading, isBarber, userProfile } = useAuth();
 
   if (loading) {
     return (
@@ -39,14 +41,20 @@ export default function RootNavigator() {
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {!session ? (
+          // 1. Not Logged In -> Login Screen
           <Stack.Screen name="Login" component={LoginScreen} />
+        ) : !userProfile?.is_onboarded ? (
+          // 2. Logged In BUT Not Onboarded -> The Gate
+          <Stack.Screen name="Onboarding" component={OnboardingScreen} />
         ) : isBarber ? (
+          // 3. Barber App (Onboarded)
           <>
             <Stack.Screen name="BarberApp" component={BarberTabs} />
             <Stack.Screen name="ReceiptBuilder" component={ReceiptBuilderScreen} />
             <Stack.Screen name="EarningsHistory" component={EarningsHistoryScreen} />
           </>
         ) : (
+          // 4. Customer App (Onboarded)
           <>
             <Stack.Screen name="CustomerApp" component={CustomerTabs} />
             <Stack.Screen name="Booking" component={BookingScreen} />
