@@ -6,6 +6,7 @@ import { supabase } from '../../services/supabase';
 import { Colors } from '../../config/colors';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
+
 export default function BookingScreen() {
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
@@ -273,6 +274,7 @@ const styles = StyleSheet.create({
   closedText: { color: Colors.error, fontSize: 16, fontWeight: 'bold', marginTop: 10 },
   footer: { 
       padding: 20, borderTopWidth: 1, borderTopColor: '#eee', 
-      position: 'absolute', bottom: 0, width: '100%', backgroundColor: 'white' 
+      position: 'absolute', bottom: 0, width: '100%', 
+      backgroundColor: 'white' 
   },
 });

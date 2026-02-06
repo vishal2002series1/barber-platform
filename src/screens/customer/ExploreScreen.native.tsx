@@ -14,7 +14,8 @@ export default function ExploreScreen() {
   const [shops, setShops] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [viewMode, setViewMode] = useState<'map' | 'list'>('map'); 
+  // const [viewMode, setViewMode] = useState<'map' | 'list'>('map'); 
+  const [viewMode, setViewMode] = useState<'map' | 'list'>('list'); // Changed from 'map' to 'list'
   const [permissionGranted, setPermissionGranted] = useState(false);
   
   // Default Map Region (Central View)
@@ -61,20 +62,42 @@ export default function ExploreScreen() {
     }
   };
 
+  // const fetchNearbyShops = async (lat: number, long: number) => {
+  //   console.log("Fetching nearby shops...");
+    
+  //   // CALLING YOUR NEW DATABASE FUNCTION
+  //   const { data, error } = await supabase.rpc('get_nearby_shops', {
+  //       user_lat: lat, 
+  //       user_long: long
+  //   });
+
+  //   if (error) {
+  //       console.error("RPC Error:", error);
+  //       Alert.alert("Error", "Could not load nearby shops.");
+  //   } else if (data) {
+  //       setShops(data);
+  //   }
+  //   setLoading(false);
+  // };
   const fetchNearbyShops = async (lat: number, long: number) => {
     console.log("Fetching nearby shops...");
     
-    // CALLING YOUR NEW DATABASE FUNCTION
     const { data, error } = await supabase.rpc('get_nearby_shops', {
         user_lat: lat, 
         user_long: long
     });
-
+  
     if (error) {
         console.error("RPC Error:", error);
         Alert.alert("Error", "Could not load nearby shops.");
     } else if (data) {
-        setShops(data);
+        // Filter shops within 10km
+        const within10km = data.filter((shop: any) => shop.dist_meters && shop.dist_meters <= 10000);
+        
+        // If less than 10 shops within 10km, show 10 nearest shops
+        const finalShops = within10km.length > 0 ? within10km : data.slice(0, 10);
+        
+        setShops(finalShops);
     }
     setLoading(false);
   };
