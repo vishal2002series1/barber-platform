@@ -259,7 +259,7 @@ export default function DashboardScreen() {
           >
             <Card.Content>
               <Text style={styles.statLabel}>Today's Earnings</Text>
-              <Text style={styles.statValue}>${stats.todayEarnings}</Text>
+              <Text style={styles.statValue}>Rs. {stats.todayEarnings}</Text>
             </Card.Content>
           </Card>
           <Card 
@@ -331,7 +331,7 @@ export default function DashboardScreen() {
                  <Text style={{fontWeight: 'bold', color: Colors.text, marginBottom: 5}}>
                     {getServiceList(req)}
                  </Text>
-                 <Chip icon="cash" style={{alignSelf: 'flex-start'}}>${req.price}</Chip>
+                 <Chip icon="cash" style={{alignSelf: 'flex-start'}}>Rs. {req.price}</Chip>
               </Card.Content>
               <Card.Actions>
                 <Button textColor={Colors.error} onPress={() => handleBookingAction(req.id, 'reject')}>Reject</Button>

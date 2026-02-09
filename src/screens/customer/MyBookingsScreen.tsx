@@ -127,7 +127,7 @@ export default function MyBookingsScreen() {
                              {new Date(item.slot_start).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                         </Text>
 
-                        <Text style={styles.priceText}>${item.price} • Tap for info</Text>
+                        <Text style={styles.priceText}>Rs. {item.price} • Tap for info</Text>
                     </View>
                 </Surface>
             </TouchableOpacity>

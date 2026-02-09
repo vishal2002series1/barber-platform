@@ -198,13 +198,13 @@ export default function ReceiptBuilderScreen() {
     let msg = `Hi ${customerName}! 👋\nHere is your receipt:\n\n`;
     
     receipt.items.forEach((i: any) => {
-        msg += `▪️ ${i.name}: $${i.price}\n`;
+        msg += `▪️ ${i.name}: Rs. ${i.price}\n`;
     });
 
-    if (receipt.discount > 0) msg += `🎉 Discount: -$${receipt.discount}\n`;
-    if (receipt.tax_amount > 0) msg += `🏛️ Tax (${taxRate}%): $${receipt.tax_amount.toFixed(2)}\n`;
+    if (receipt.discount > 0) msg += `🎉 Discount: -Rs. ${receipt.discount}\n`;
+    if (receipt.tax_amount > 0) msg += `🏛️ Tax (${taxRate}%): Rs. ${receipt.tax_amount.toFixed(2)}\n`;
     
-    msg += `\n*TOTAL: $${total.toFixed(2)}*\n\n`;
+    msg += `\n*TOTAL: Rs. ${total.toFixed(2)}*\n\n`;
     msg += `Thanks for visiting! Please rate your experience in the app.`;
 
     const link = `whatsapp://send?phone=${customerPhone}&text=${encodeURIComponent(msg)}`;
@@ -259,7 +259,7 @@ export default function ReceiptBuilderScreen() {
                             {suggestions.map((s, i) => (
                                 <TouchableOpacity key={i} onPress={() => selectSuggestion(s)} style={styles.suggestionItem}>
                                     <Text style={{fontWeight: 'bold'}}>{s.name}</Text>
-                                    <Text style={{color: Colors.primary}}>${s.price}</Text>
+                                    <Text style={{color: Colors.primary}}>Rs. {s.price}</Text>
                                 </TouchableOpacity>
                             ))}
                         </View>
@@ -309,7 +309,7 @@ export default function ReceiptBuilderScreen() {
       <Surface style={styles.footer} elevation={4}>
           <View>
               <Text style={{color: 'gray'}}>Total to Pay</Text>
-              <Text style={styles.totalText}>${finalTotal.toFixed(2)}</Text>
+              <Text style={styles.totalText}>Rs. {finalTotal.toFixed(2)}</Text>
           </View>
           <Button 
             mode="contained" 

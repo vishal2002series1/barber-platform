@@ -171,7 +171,7 @@ export default function BookingDetailScreen() {
                     {receipt.items.map((item: any, index: number) => (
                         <View key={index} style={styles.row}>
                             <Text style={styles.itemText}>{item.name}</Text>
-                            <Text style={styles.itemPrice}>${item.price}</Text>
+                            <Text style={styles.itemPrice}>Rs. {item.price}</Text>
                         </View>
                     ))}
                  </View>
@@ -182,19 +182,19 @@ export default function BookingDetailScreen() {
                     {receipt.discount > 0 && (
                         <View style={styles.row}>
                             <Text style={{color: Colors.success}}>Discount</Text>
-                            <Text style={{color: Colors.success}}>-${receipt.discount}</Text>
+                            <Text style={{color: Colors.success}}>-Rs.{receipt.discount}</Text>
                         </View>
                     )}
                     {receipt.tax_amount > 0 && (
                         <View style={styles.row}>
                             <Text style={{color: 'gray'}}>Tax</Text>
-                            <Text style={{color: 'gray'}}>${receipt.tax_amount.toFixed(2)}</Text>
+                            <Text style={{color: 'gray'}}>Rs. {receipt.tax_amount.toFixed(2)}</Text>
                         </View>
                     )}
                     <View style={[styles.row, {marginTop: 10}]}>
                         <Text style={{fontSize: 20, fontWeight: 'bold'}}>Total Paid</Text>
                         <Text style={{fontSize: 20, fontWeight: 'bold', color: Colors.primary}}>
-                            ${booking.final_price?.toFixed(2)}
+                        Rs. {booking.final_price?.toFixed(2)}
                         </Text>
                     </View>
                  </View>

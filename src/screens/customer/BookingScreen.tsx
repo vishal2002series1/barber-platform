@@ -164,7 +164,7 @@ export default function BookingScreen() {
                 <TouchableOpacity key={item.id} onPress={() => toggleService(item.id)} style={styles.serviceRow}>
                     <View style={{flex: 1}}>
                         <Text style={styles.serviceName}>{item.name}</Text>
-                        <Text style={styles.servicePrice}>${item.price} • {item.duration_min} mins</Text>
+                        <Text style={styles.servicePrice}>Rs. {item.price} • {item.duration_min} mins</Text>
                     </View>
                     <Checkbox 
                         status={selectedServices.includes(item.id) ? 'checked' : 'unchecked'}

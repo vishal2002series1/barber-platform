@@ -84,7 +84,7 @@ export default function EarningsHistoryScreen() {
       <Surface style={styles.summaryCard} elevation={4}>
           <View style={{alignItems: 'center'}}>
               <Text style={{color: Colors.textSecondary, marginBottom: 5}}>Total Earnings ({filter})</Text>
-              <Text style={styles.bigNumber}>${stats.revenue.toFixed(2)}</Text>
+              <Text style={styles.bigNumber}>Rs. {stats.revenue.toFixed(2)}</Text>
               <Text style={{color: Colors.success, fontWeight: 'bold'}}>{stats.count} Jobs Completed</Text>
           </View>
       </Surface>
@@ -125,7 +125,7 @@ export default function EarningsHistoryScreen() {
                             <Text style={styles.serviceText}>{getServiceNames(item)}</Text>
                         </View>
                         <View style={{alignItems: 'flex-end'}}>
-                             <Text style={styles.priceText}>+${item.final_price}</Text>
+                             <Text style={styles.priceText}>+Rs. {item.final_price}</Text>
                              <MaterialCommunityIcons name="check-circle" size={16} color={Colors.success} style={{marginTop: 5}} />
                         </View>
                     </Card.Content>

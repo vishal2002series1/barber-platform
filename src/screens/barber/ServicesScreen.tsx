@@ -162,7 +162,7 @@ export default function ServicesScreen() {
               title={item.name}
               titleStyle={{fontWeight: 'bold'}}
               description={`${item.duration_min} mins`}
-              right={() => <Text style={styles.priceTag}>${item.price}</Text>}
+              right={() => <Text style={styles.priceTag}>Rs.{item.price}</Text>}
               left={props => <List.Icon {...props} icon="content-cut" color={Colors.primary} />}
               style={styles.item}
               onPress={() => openEditModal(item)} // <--- Tap to Edit
@@ -189,7 +189,7 @@ export default function ServicesScreen() {
           
           <View style={{flexDirection: 'row', justifyContent: 'space-between'}}>
             <TextInput 
-                label="Price ($)" 
+                label="Price (Rs. )" 
                 value={price} 
                 onChangeText={setPrice} 
                 keyboardType="numeric" 
