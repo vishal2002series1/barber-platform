@@ -7,7 +7,7 @@ import { Colors } from '../../config/colors';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
-import { uploadImage } from '../../services/storage'; // Add this
+import { uploadImage } from '../../services/storage';
 
 export default function OnboardingScreen() {
   const { userProfile, signOut } = useAuth();
@@ -30,61 +30,6 @@ export default function OnboardingScreen() {
   const [tempPrice, setTempPrice] = useState('');
   const [tempDuration, setTempDuration] = useState('30');
 
-  // --- 1. BULLETPROOF IMAGE UPLOAD (Fixes Base64 Error) ---
-  // --- 1. BULLETPROOF IMAGE UPLOAD (Actually works on Android) ---
-// const uploadImageRobust = async (uri: string): Promise<string> => {
-//     const ext = uri.substring(uri.lastIndexOf('.') + 1);
-//     const fileName = `${Date.now()}.${ext}`;
-  
-//     try {
-//       console.log("Starting upload for:", uri);
-  
-//       // Method 1: XMLHttpRequest (Most reliable on Android)
-//       const blob = await new Promise<Blob>((resolve, reject) => {
-//         const xhr = new XMLHttpRequest();
-//         xhr.onload = function() {
-//           resolve(xhr.response);
-//         };
-//         xhr.onerror = function(e) {
-//           console.log("XHR Error:", e);
-//           reject(new TypeError('Network request failed'));
-//         };
-//         xhr.responseType = 'blob';
-//         xhr.open('GET', uri, true);
-//         xhr.send(null);
-//       });
-  
-//       console.log("Blob created, size:", blob.size);
-  
-//       // 2. Upload to Supabase
-//       const { data, error } = await supabase.storage
-//         .from('avatars')
-//         .upload(fileName, blob, {
-//           contentType: `image/${ext === 'jpg' ? 'jpeg' : ext}`,
-//           upsert: false
-//         });
-  
-//       if (error) {
-//         console.log("Supabase error:", error);
-//         throw error;
-//       }
-  
-//       console.log("Upload successful:", data);
-  
-//       // 3. Get Public URL
-//       const { data: urlData } = supabase.storage
-//         .from('avatars')
-//         .getPublicUrl(fileName);
-  
-//       console.log("Public URL:", urlData.publicUrl);
-//       return urlData.publicUrl;
-  
-//     } catch (error: any) {
-//       console.error("Upload Logic Error:", error);
-//       throw error;
-//     }
-//   }; 
-
   const pickShopImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'], allowsEditing: true, aspect: [16, 9], quality: 0.5,
@@ -93,7 +38,6 @@ export default function OnboardingScreen() {
     if (!result.canceled) {
       setLoading(true);
       try {
-        // USE THE FIXED SERVICE HERE
         const url = await uploadImage(result.assets[0].uri, 'shop-images'); 
         setShopImage(url);
       } catch (e: any) { 
@@ -104,7 +48,6 @@ export default function OnboardingScreen() {
     }
   };
 
-  // --- 2. LOCATION ---
   const getInitialLocation = async () => {
     setLoading(true);
     try {
@@ -122,7 +65,6 @@ export default function OnboardingScreen() {
     }
   };
 
-  // --- 3. SERVICES LOGIC ---
   const addService = () => {
     if (!tempName || !tempPrice) { Alert.alert("Missing Info", "Name and Price required."); return; }
     setServices([...services, { name: tempName, price: tempPrice, duration: tempDuration }]);
@@ -135,7 +77,6 @@ export default function OnboardingScreen() {
     setServices(newServices);
   };
 
-  // --- 4. SUBMIT VIA RPC ---
   const finishOnboarding = async () => {
     if (role === 'barber' && services.length < 3) {
       Alert.alert("Wait!", "Please add at least 3 services to continue.");
@@ -162,11 +103,10 @@ export default function OnboardingScreen() {
 
       if (error) throw error;
       
-      // SUCCESS: Alert the user and then Sign Out to force them back to Login
       Alert.alert(
         "Setup Complete", 
         "Your profile is ready! Please login again to start using the app.",
-        [{ text: "OK", onPress: () => signOut() }] // This clears the session and closes the screen
+        [{ text: "OK", onPress: () => signOut() }] 
       );
 
     } catch (error: any) {
@@ -191,6 +131,12 @@ export default function OnboardingScreen() {
       <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 100 }}>
         
         <View style={{ marginTop: 50, marginBottom: 20 }}>
+          {/* --- NEW: ApnaBarber Logo --- */}
+          <Image 
+            source={require('../../../assets/logo.png')} 
+            style={styles.logoImage} 
+            resizeMode="contain"
+          />
           <Text style={styles.title}>Welcome!</Text>
           <Text style={styles.subtitle}>Let's set up your profile.</Text>
           <ProgressBar progress={step / 3} color={Colors.primary} style={{ marginTop: 20, height: 6, borderRadius: 3 }} />
@@ -273,7 +219,7 @@ export default function OnboardingScreen() {
                   key={index} 
                   onClose={() => removeService(index)} 
                   style={{backgroundColor: '#E0E0E0'}}
-                  textStyle={{ color: 'black' }} // FIX: VISIBLE TEXT
+                  textStyle={{ color: 'black' }}
                   icon="content-cut"
                 >
                   {s.name} (${s.price})
@@ -322,6 +268,8 @@ export default function OnboardingScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: 'white' },
+  // --- NEW: Logo Style ---
+  logoImage: { width: 100, height: 100, marginBottom: 15, alignSelf: 'flex-start' },
   title: { fontSize: 32, fontWeight: 'bold', color: Colors.primary },
   subtitle: { fontSize: 18, color: 'gray' },
   label: { fontSize: 18, fontWeight: 'bold', marginBottom: 10, marginTop: 10 },

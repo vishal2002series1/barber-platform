@@ -1,17 +1,17 @@
 import React, { useState } from 'react';
 import { 
   View, Text, StyleSheet, TouchableOpacity, 
-  KeyboardAvoidingView, Platform, Alert 
+  KeyboardAvoidingView, Platform, Alert, Image 
 } from 'react-native';
 import { TextInput, Button, Divider } from 'react-native-paper';
 import { Colors } from '../../config/colors';
 import { Strings } from '../../config/strings';
 import { useAuth } from '../../auth/AuthContext';
-import { useNavigation } from '@react-navigation/native'; // <--- 1. Import Navigation
+import { useNavigation } from '@react-navigation/native';
 
 export default function LoginScreen() {
   const { signup, signInWithGoogle } = useAuth();
-  const navigation = useNavigation<any>(); // <--- 2. Initialize Navigation
+  const navigation = useNavigation<any>();
   
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
@@ -51,9 +51,12 @@ export default function LoginScreen() {
       <View style={styles.contentContainer}>
         
         <View style={styles.header}>
-          <View style={styles.logoPlaceholder}>
-             <Text style={styles.logoText}>✂️</Text>
-          </View>
+          {/* --- NEW: ApnaBarber Logo --- */}
+          <Image 
+            source={require('../../../assets/logo.png')} 
+            style={styles.logoImage} 
+            resizeMode="contain"
+          />
           <Text style={styles.title}>{isLogin ? Strings.loginBtn : "Create Account"}</Text>
         </View>
 
@@ -75,7 +78,6 @@ export default function LoginScreen() {
         <TextInput label="Email" value={email} onChangeText={setEmail} mode="outlined" style={styles.input} keyboardType="email-address" autoCapitalize="none" />
         <TextInput label="Password" value={password} onChangeText={setPassword} mode="outlined" style={styles.input} secureTextEntry />
 
-        {/* --- 3. FORGOT PASSWORD LINK (Only for Login) --- */}
         {isLogin && (
           <View style={{alignItems: 'flex-end', marginBottom: 20}}>
             <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')}>
@@ -88,7 +90,6 @@ export default function LoginScreen() {
           {loading ? "Processing..." : (isLogin ? Strings.loginBtn : "Sign Up")}
         </Button>
 
-        {/* --- GOOGLE BUTTON --- */}
         <View style={{flexDirection: 'row', alignItems: 'center', marginVertical: 20}}>
             <Divider style={{flex: 1}} />
             <Text style={{marginHorizontal: 10, color: 'gray'}}>OR</Text>
@@ -121,8 +122,8 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   contentContainer: { flex: 1, justifyContent: 'center', padding: 24, maxWidth: 500, width: '100%', alignSelf: 'center' },
   header: { alignItems: 'center', marginBottom: 30 },
-  logoPlaceholder: { width: 80, height: 80, backgroundColor: Colors.secondary, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
-  logoText: { fontSize: 40 },
+  // --- NEW: Logo Style ---
+  logoImage: { width: 150, height: 150, marginBottom: 10 },
   title: { fontSize: 28, fontWeight: 'bold', color: Colors.text },
   roleContainer: { flexDirection: 'row', backgroundColor: '#E5E7EB', borderRadius: 12, padding: 4, marginBottom: 20 },
   roleBtn: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 8 },
