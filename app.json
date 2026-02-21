@@ -3,6 +3,7 @@
     "name": "barber-platform",
     "slug": "barber-platform",
     "version": "1.0.0",
+    "scheme": "barberplatform",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",

@@ -1,16 +1,18 @@
 import React, { useState } from 'react';
 import { 
   View, Text, StyleSheet, TouchableOpacity, 
-  KeyboardAvoidingView, Platform, Alert, Image 
+  KeyboardAvoidingView, Platform, Alert 
 } from 'react-native';
 import { TextInput, Button, Divider } from 'react-native-paper';
 import { Colors } from '../../config/colors';
 import { Strings } from '../../config/strings';
 import { useAuth } from '../../auth/AuthContext';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native'; // <--- 1. Import Navigation
 
 export default function LoginScreen() {
-  const { signup, signInWithGoogle } = useAuth(); // <--- Get Google Func
+  const { signup, signInWithGoogle } = useAuth();
+  const navigation = useNavigation<any>(); // <--- 2. Initialize Navigation
+  
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -72,6 +74,15 @@ export default function LoginScreen() {
 
         <TextInput label="Email" value={email} onChangeText={setEmail} mode="outlined" style={styles.input} keyboardType="email-address" autoCapitalize="none" />
         <TextInput label="Password" value={password} onChangeText={setPassword} mode="outlined" style={styles.input} secureTextEntry />
+
+        {/* --- 3. FORGOT PASSWORD LINK (Only for Login) --- */}
+        {isLogin && (
+          <View style={{alignItems: 'flex-end', marginBottom: 20}}>
+            <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')}>
+              <Text style={{color: Colors.primary, fontWeight: 'bold'}}>Forgot Password?</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         <Button mode="contained" onPress={handleAuth} loading={loading} style={styles.mainBtn} buttonColor={Colors.primary}>
           {loading ? "Processing..." : (isLogin ? Strings.loginBtn : "Sign Up")}
