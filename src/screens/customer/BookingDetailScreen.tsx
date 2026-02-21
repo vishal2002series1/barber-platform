@@ -30,7 +30,6 @@ export default function BookingDetailScreen() {
   }, [bookingId]);
 
   const fetchBookingDetails = async () => {
-    // Note: select('*') automatically includes cancellation_reason
     const { data, error } = await supabase
       .from('bookings')
       .select(`
@@ -42,8 +41,12 @@ export default function BookingDetailScreen() {
           latitude,
           longitude,
           profiles:owner_id ( full_name, phone ) 
+        ),
+        booking_services (
+          price_at_booking,
+          services ( name, duration_min )
         )
-      `)
+      `) // <--- NEW: Now fetching the specific services booked
       .eq('id', bookingId)
       .single();
 
@@ -56,7 +59,6 @@ export default function BookingDetailScreen() {
     }
   };
 
-  // --- REVIEW LOGIC ---
   const submitReview = async () => {
     if (!comment.trim()) {
         Alert.alert("Review", "Please write a short comment.");
@@ -98,7 +100,6 @@ export default function BookingDetailScreen() {
     }
   };
 
-  // --- ACTIONS ---
   const callShop = () => {
     const phone = booking?.shops?.profiles?.phone;
     if (phone) Linking.openURL(`tel:${phone}`);
@@ -119,13 +120,27 @@ export default function BookingDetailScreen() {
     }
   };
 
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'accepted': return Colors.success;
+      case 'rejected': return Colors.error;
+      case 'cancelled': return Colors.error;
+      case 'completed': return Colors.primary;
+      case 'requested': return '#F59E0B'; 
+      default: return 'gray';
+    }
+  };
+
   if (loading) return <ActivityIndicator style={{marginTop: 50}} color={Colors.primary} />;
   if (!booking) return null;
 
   const isCompleted = booking.status === 'completed';
-  const isCancelled = booking.status === 'cancelled'; // <--- Check Cancelled
+  const isCancelled = booking.status === 'cancelled';
   const receipt = booking.receipt_data;
-  const statusColor = isCompleted ? Colors.primary : isCancelled || booking.status === 'rejected' ? Colors.error : booking.status === 'accepted' ? Colors.success : 'gray';
+  
+  // Calculate Totals based on what was requested
+  const expectedTotal = booking.booking_services?.reduce((sum: number, item: any) => sum + (item.price_at_booking || 0), 0) || booking.price;
+  const expectedDuration = booking.booking_services?.reduce((sum: number, item: any) => sum + (item.services?.duration_min || 0), 0) || 0;
 
   return (
     <Provider>
@@ -139,7 +154,7 @@ export default function BookingDetailScreen() {
 
       <ScrollView contentContainerStyle={styles.content}>
         
-        {/* --- 0. CANCELLED BANNER (NEW) --- */}
+        {/* --- CANCELLED BANNER --- */}
         {isCancelled && (
             <Surface style={styles.cancelBanner} elevation={2}>
                 <View style={{flexDirection:'row', alignItems:'center', marginBottom: 5}}>
@@ -154,8 +169,57 @@ export default function BookingDetailScreen() {
             </Surface>
         )}
 
-        {/* --- 1. DIGITAL RECEIPT (If Completed) --- */}
-        {isCompleted && receipt ? (
+        {/* --- STATUS & TIME CARD --- */}
+        {!isCompleted && (
+            <Surface style={styles.statusCard} elevation={1}>
+                <Chip 
+                    textStyle={{color: 'white', fontWeight: 'bold'}}
+                    style={{backgroundColor: getStatusColor(booking.status), alignSelf: 'center', marginBottom: 10}}
+                >
+                    {booking.status.toUpperCase()}
+                </Chip>
+                <Text style={styles.dateText}>
+                    {new Date(booking.slot_start).toLocaleDateString(undefined, {weekday:'long', month:'short', day:'numeric'})}
+                </Text>
+                <Text style={styles.timeText}>
+                    {new Date(booking.slot_start).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                </Text>
+            </Surface>
+        )}
+
+        {/* --- SERVICES BOOKED CARD (NEW) --- */}
+        {(!isCompleted || !receipt) && (
+            <>
+                <Text style={styles.sectionTitle}>Services Requested</Text>
+                <Surface style={styles.servicesCard} elevation={1}>
+                    {booking.booking_services?.map((bs: any, index: number) => (
+                        <View key={index} style={styles.serviceRow}>
+                            <View style={{flex: 1}}>
+                                <Text style={styles.itemText}>{bs.services?.name}</Text>
+                                <Text style={styles.itemDuration}>{bs.services?.duration_min} mins</Text>
+                            </View>
+                            <Text style={styles.itemPrice}>Rs. {bs.price_at_booking}</Text>
+                        </View>
+                    ))}
+                    
+                    <Divider style={{marginVertical: 10}} />
+                    
+                    <View style={styles.row}>
+                        <Text style={{fontSize: 16, color: 'gray'}}>Est. Duration</Text>
+                        <Text style={{fontSize: 16, fontWeight: '600'}}>{expectedDuration} mins</Text>
+                    </View>
+                    <View style={[styles.row, {marginTop: 5}]}>
+                        <Text style={{fontSize: 18, fontWeight: 'bold'}}>Total Price</Text>
+                        <Text style={{fontSize: 18, fontWeight: 'bold', color: Colors.primary}}>
+                            Rs. {expectedTotal}
+                        </Text>
+                    </View>
+                </Surface>
+            </>
+        )}
+
+        {/* --- DIGITAL RECEIPT (If Completed) --- */}
+        {isCompleted && receipt && (
              <Surface style={styles.receiptCard} elevation={2}>
                  <View style={{alignItems:'center', marginBottom: 15}}>
                     <Avatar.Icon icon="check" size={40} style={{backgroundColor: Colors.success}} />
@@ -209,25 +273,9 @@ export default function BookingDetailScreen() {
                     Rate Experience
                  </Button>
              </Surface>
-        ) : !isCancelled && (
-            /* --- 2. STANDARD STATUS CARD (Only if NOT cancelled or completed) --- */
-            <Surface style={styles.statusCard} elevation={1}>
-                <Chip 
-                    textStyle={{color: 'white', fontWeight: 'bold'}}
-                    style={{backgroundColor: statusColor, alignSelf: 'center', marginBottom: 10}}
-                >
-                    {booking.status.toUpperCase()}
-                </Chip>
-                <Text style={styles.dateText}>
-                    {new Date(booking.slot_start).toLocaleDateString(undefined, {weekday:'long', month:'short', day:'numeric'})}
-                </Text>
-                <Text style={styles.timeText}>
-                    {new Date(booking.slot_start).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                </Text>
-            </Surface>
         )}
 
-        {/* SHOP INFO */}
+        {/* --- SHOP INFO --- */}
         <Text style={styles.sectionTitle}>Barber Shop</Text>
         <Card style={styles.card}>
             <Card.Cover source={{ uri: booking.shops?.image_url || 'https://placehold.co/600x400/1A1A1A/FFF?text=Shop' }} />
@@ -243,7 +291,7 @@ export default function BookingDetailScreen() {
             </Card.Actions>
         </Card>
 
-        {/* CANCEL BUTTON (User can cancel too) */}
+        {/* CANCEL BUTTON */}
         {!isCompleted && !isCancelled && booking.status !== 'rejected' && (
             <Button 
                 mode="contained" 
@@ -317,15 +365,20 @@ const styles = StyleSheet.create({
   
   // Cards
   cancelBanner: { padding: 20, borderRadius: 12, backgroundColor: '#FEF2F2', marginBottom: 20, borderLeftWidth: 4, borderLeftColor: Colors.error },
-  receiptCard: { padding: 20, borderRadius: 12, backgroundColor: 'white', marginBottom: 20 },
   statusCard: { padding: 20, borderRadius: 12, backgroundColor: 'white', alignItems: 'center', marginBottom: 20 },
+  servicesCard: { padding: 20, borderRadius: 12, backgroundColor: 'white', marginBottom: 20 },
+  receiptCard: { padding: 20, borderRadius: 12, backgroundColor: 'white', marginBottom: 20 },
   card: { marginBottom: 15, backgroundColor: 'white', borderRadius: 12 },
   
   dateText: { fontSize: 18, fontWeight: '600', marginTop: 5 },
   timeText: { fontSize: 32, fontWeight: 'bold', color: Colors.primary, marginVertical: 5 },
   sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 10, color: Colors.text },
+  
+  // Rows
   row: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  itemText: { fontSize: 16, color: '#333' },
+  serviceRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  itemText: { fontSize: 16, color: '#333', fontWeight: '500' },
+  itemDuration: { fontSize: 12, color: 'gray', marginTop: 2 },
   itemPrice: { fontSize: 16, fontWeight: 'bold' },
 
   // Modal

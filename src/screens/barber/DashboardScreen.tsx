@@ -27,8 +27,8 @@ export default function DashboardScreen() {
   // Contact & Cancel Modal State
   const [contactModalVisible, setContactModalVisible] = useState(false);
   const [selectedJob, setSelectedJob] = useState<any>(null);
-  const [cancelMode, setCancelMode] = useState(false); // <--- New State
-  const [cancelReason, setCancelReason] = useState(''); // <--- New State
+  const [cancelMode, setCancelMode] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
   const [cancelling, setCancelling] = useState(false);
 
   // REF
@@ -74,7 +74,7 @@ export default function DashboardScreen() {
       .order('created_at', { ascending: false });
     if (pending) setRequests(pending);
 
-    // 3. Get ACTIVE Jobs
+    // 3. Get ACTIVE Jobs (Already fetches future bookings because of gte operator!)
     const { data: active } = await supabase
       .from('bookings')
       .select(`
@@ -172,7 +172,7 @@ export default function DashboardScreen() {
 
   const openContactOptions = (job: any) => {
       setSelectedJob(job);
-      setCancelMode(false); // Reset to normal mode
+      setCancelMode(false); 
       setCancelReason('');
       setContactModalVisible(true);
   };
@@ -189,7 +189,6 @@ export default function DashboardScreen() {
       setContactModalVisible(false);
   };
 
-  // --- NEW: CANCEL LOGIC ---
   const handleConfirmCancel = async () => {
       if (!cancelReason.trim()) {
           Alert.alert("Required", "Please enter a reason for cancellation.");
@@ -198,7 +197,6 @@ export default function DashboardScreen() {
 
       setCancelling(true);
       
-      // Update DB directly
       const { error } = await supabase
         .from('bookings')
         .update({ 
@@ -214,13 +212,32 @@ export default function DashboardScreen() {
           Alert.alert("Error", error.message);
       } else {
           Alert.alert("Cancelled", "Appointment has been cancelled.");
-          fetchDashboardData(); // Refresh list
+          fetchDashboardData(); 
       }
   };
 
   const getServiceList = (job: any) => {
       if (!job.booking_services || job.booking_services.length === 0) return "Service";
       return job.booking_services.map((bs: any) => bs.services?.name).join(", ");
+  };
+
+  // --- NEW: Smart Date Formatter ---
+  const formatDateTime = (dateString: string) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    const today = new Date();
+    
+    // Extract the time portion (e.g., "11:00 AM")
+    const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    
+    // Check if the date is today
+    if (date.toDateString() === today.toDateString()) {
+        return `Today, ${timeStr}`;
+    }
+    
+    // Otherwise, show "Feb 23, 11:00 AM"
+    const dateStr = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    return `${dateStr}, ${timeStr}`;
   };
 
   return (
@@ -283,7 +300,7 @@ export default function DashboardScreen() {
                             <Card.Title 
                                 title={job.profiles?.full_name || "Customer"} 
                                 titleStyle={{fontWeight: 'bold', textDecorationLine: 'underline'}}
-                                subtitle={new Date(job.slot_start).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                subtitle={formatDateTime(job.slot_start)} // <--- NEW: Uses Date Formatter
                                 left={(props) => <Avatar.Icon {...props} icon="calendar-check" backgroundColor={Colors.primary} />}
                                 right={(props) => <IconButton {...props} icon="dots-vertical" onPress={() => openContactOptions(job)} />}
                             />
@@ -321,12 +338,12 @@ export default function DashboardScreen() {
             <Card key={req.id} style={styles.requestCard}>
               <Card.Title 
                 title={req.profiles?.full_name || "New Customer"} 
-                subtitle={`Requested: ${new Date(req.slot_start).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`}
+                subtitle={`For: ${formatDateTime(req.slot_start)}`} // <--- NEW: Uses Date Formatter
                 left={(props) => <Avatar.Icon {...props} icon="account-clock" backgroundColor={Colors.secondary} />}
               />
               <Card.Content>
                  <Text style={{fontSize: 12, color: 'gray', marginBottom: 5}}>
-                    Received: {new Date(req.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                    Received: {formatDateTime(req.created_at)} {/* <--- NEW: Uses Date Formatter */}
                  </Text>
                  <Text style={{fontWeight: 'bold', color: Colors.text, marginBottom: 5}}>
                     {getServiceList(req)}

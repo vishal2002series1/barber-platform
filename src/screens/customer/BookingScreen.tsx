@@ -6,7 +6,6 @@ import { supabase } from '../../services/supabase';
 import { Colors } from '../../config/colors';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
-
 export default function BookingScreen() {
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
@@ -51,12 +50,12 @@ export default function BookingScreen() {
     
     if (shop) setShopDetails(shop);
 
-    // 2. Get Services (FIX: Only fetch ACTIVE services)
+    // 2. Get Services
     const { data: menu } = await supabase
         .from('services')
         .select('*')
         .eq('shop_id', shopId)
-        .eq('is_active', true); // <--- THIS WAS MISSING
+        .eq('is_active', true);
     
     if (menu) setServices(menu);
     setLoading(false);
@@ -125,6 +124,25 @@ export default function BookingScreen() {
     }
   };
 
+  // --- NEW: Helper function to generate the next 14 days ---
+  const generateDates = () => {
+    const dates = [];
+    const today = new Date();
+    for (let i = 0; i < 14; i++) {
+        const nextDate = new Date(today);
+        nextDate.setDate(today.getDate() + i);
+        dates.push({
+            dateString: nextDate.toISOString().split('T')[0],
+            dayName: nextDate.toLocaleDateString('en-US', { weekday: 'short' }),
+            dayNumber: nextDate.getDate(),
+            monthName: nextDate.toLocaleDateString('en-US', { month: 'short' })
+        });
+    }
+    return dates;
+  };
+
+  const availableDates = generateDates();
+
   if (loading) return <ActivityIndicator style={{marginTop: 50}} />;
 
   const isShopClosed = shopDetails && !shopDetails.is_open;
@@ -177,9 +195,36 @@ export default function BookingScreen() {
 
         <Divider style={{height: 6, backgroundColor: '#f4f4f4'}} />
 
+        {/* --- NEW: DATE SCROLLER --- */}
+        <View style={styles.section}>
+            <Text style={styles.sectionHeader}>Select Date</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.dateScroller}>
+                {availableDates.map((item, index) => {
+                    const isSelected = selectedDate === item.dateString;
+                    return (
+                        <TouchableOpacity 
+                            key={index} 
+                            onPress={() => {
+                                setSelectedDate(item.dateString);
+                                setSelectedSlot(null); // Reset slot when date changes
+                            }}
+                            style={[
+                                styles.dateCard, 
+                                isSelected && styles.dateCardSelected
+                            ]}
+                        >
+                            <Text style={[styles.dateDayName, isSelected && {color: 'white'}]}>{item.dayName}</Text>
+                            <Text style={[styles.dateDayNumber, isSelected && {color: 'white'}]}>{item.dayNumber}</Text>
+                            <Text style={[styles.dateMonthName, isSelected && {color: 'white'}]}>{item.monthName}</Text>
+                        </TouchableOpacity>
+                    );
+                })}
+            </ScrollView>
+        </View>
+
         {/* TIME SLOTS */}
         <View style={styles.section}>
-            <Text style={styles.sectionHeader}>Select Time ({selectedDate})</Text>
+            <Text style={styles.sectionHeader}>Available Times</Text>
             
             {isShopClosed ? (
                 <View style={styles.closedContainer}>
@@ -188,7 +233,7 @@ export default function BookingScreen() {
                 </View>
             ) : slots.length === 0 ? (
                 <Text style={{color: 'gray', fontStyle: 'italic', marginTop: 10}}>
-                    No available slots for the rest of the day.
+                    No available slots for this date.
                 </Text>
             ) : (
                 <View style={styles.slotsGrid}>
@@ -261,6 +306,20 @@ const styles = StyleSheet.create({
   },
   serviceName: { fontSize: 16, fontWeight: '500' },
   servicePrice: { color: 'gray', marginTop: 2 },
+  
+  // --- NEW STYLES FOR DATE SCROLLER ---
+  dateScroller: { flexDirection: 'row', marginBottom: 10 },
+  dateCard: {
+      alignItems: 'center', justifyContent: 'center',
+      paddingVertical: 12, paddingHorizontal: 16,
+      marginRight: 12, borderRadius: 12,
+      backgroundColor: '#f5f5f5', borderWidth: 1, borderColor: '#eee'
+  },
+  dateCardSelected: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  dateDayName: { fontSize: 12, color: 'gray', marginBottom: 4 },
+  dateDayNumber: { fontSize: 20, fontWeight: 'bold', color: Colors.text },
+  dateMonthName: { fontSize: 12, color: 'gray', marginTop: 4 },
+
   slotsGrid: { flexDirection: 'row', flexWrap: 'wrap' },
   slotBadge: { 
     width: '30%', margin: '1.5%', paddingVertical: 10, 

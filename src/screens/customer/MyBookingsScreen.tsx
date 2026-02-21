@@ -30,8 +30,9 @@ export default function MyBookingsScreen() {
         slot_start,
         status,
         price,
-        shops ( shop_name, image_url )
-      `)
+        shops ( shop_name, image_url ),
+        booking_services ( services ( name ) ) 
+      `) // <--- NEW: Now fetching the services linked to the booking
       .eq('customer_id', userProfile?.id)
       .order('slot_start', { ascending: false }); 
 
@@ -43,11 +44,33 @@ export default function MyBookingsScreen() {
     switch (status) {
       case 'accepted': return Colors.success;
       case 'rejected': return Colors.error;
-      case 'cancelled': return Colors.error; // <--- CHANGED TO RED
+      case 'cancelled': return Colors.error;
       case 'completed': return Colors.primary;
       case 'requested': return '#F59E0B'; 
       default: return Colors.textSecondary;
     }
+  };
+
+  // --- NEW: Smart Date Formatter ---
+  const formatDateTime = (dateString: string) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    const today = new Date();
+    
+    const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    
+    if (date.toDateString() === today.toDateString()) {
+        return `Today, ${timeStr}`;
+    }
+    
+    const dateStr = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    return `${dateStr}, ${timeStr}`;
+  };
+
+  // --- NEW: Service List Extractor ---
+  const getServiceList = (job: any) => {
+      if (!job.booking_services || job.booking_services.length === 0) return "Standard Service";
+      return job.booking_services.map((bs: any) => bs.services?.name).join(", ");
   };
 
   // --- FILTERING LOGIC ---
@@ -120,14 +143,17 @@ export default function MyBookingsScreen() {
                             </Chip>
                         </View>
                         
-                        <Text style={styles.dateText}>
-                             {new Date(item.slot_start).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-                        </Text>
+                        {/* Unified Date & Time */}
                         <Text style={styles.timeText}>
-                             {new Date(item.slot_start).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                             {formatDateTime(item.slot_start)}
                         </Text>
 
-                        <Text style={styles.priceText}>Rs. {item.price} • Tap for info</Text>
+                        {/* Extracted Services */}
+                        <Text style={styles.serviceText} numberOfLines={1}>
+                             ✂️ {getServiceList(item)}
+                        </Text>
+
+                        <Text style={styles.priceText}>Rs. {item.price} • Tap for details</Text>
                     </View>
                 </Surface>
             </TouchableOpacity>
@@ -155,7 +181,7 @@ const styles = StyleSheet.create({
   cardContent: { flex: 1, padding: 12, justifyContent: 'center' },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 },
   shopName: { fontSize: 16, fontWeight: 'bold', color: Colors.text, maxWidth: '65%' },
-  dateText: { fontSize: 14, color: 'gray', fontWeight: '500' },
-  timeText: { fontSize: 18, fontWeight: 'bold', color: Colors.primary, marginVertical: 2 },
+  timeText: { fontSize: 16, fontWeight: 'bold', color: Colors.primary, marginVertical: 2 },
+  serviceText: { fontSize: 13, color: '#555', fontWeight: '500', marginTop: 2 },
   priceText: { fontSize: 12, color: '#888', marginTop: 4 }
 });
