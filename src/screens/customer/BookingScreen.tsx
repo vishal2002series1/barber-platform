@@ -5,12 +5,13 @@ import { useRoute, useNavigation } from '@react-navigation/native';
 import { supabase } from '../../services/supabase';
 import { Colors } from '../../config/colors';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context'; // <--- NEW: Import safe area hook
 
 export default function BookingScreen() {
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
+  const insets = useSafeAreaInsets(); // <--- NEW: Get device safe area dimensions
   
-  // --- NEW: Extract Edit Mode Params ---
   const { shopId, shopName, editMode, bookingId, initialServices, initialDate, initialSlot } = route.params;
 
   // Data State
@@ -66,9 +67,6 @@ export default function BookingScreen() {
             return true;
         });
 
-        // --- NEW: CRITICAL FIX FOR EDIT MODE ---
-        // If the user is editing, their CURRENT slot will show as "busy" because THEY own it.
-        // We must forcefully mark it as "free" so they can click it and keep their time.
         if (editMode && initialSlot && initialDate === selectedDate) {
             const currentSlotObj = filtered.find((s: any) => s.slot_time === initialSlot);
             if (currentSlotObj) currentSlotObj.status = 'free';
@@ -91,7 +89,6 @@ export default function BookingScreen() {
 
     let submitError = null;
 
-    // --- NEW: ROUTE TO PROPER BACKEND FUNCTION ---
     if (editMode) {
         const { error } = await supabase.rpc('modify_booking_v2', {
             p_booking_id: bookingId,
@@ -152,6 +149,9 @@ export default function BookingScreen() {
   if (loading) return <ActivityIndicator style={{marginTop: 50}} />;
   const isShopClosed = shopDetails && !shopDetails.is_open;
 
+  // Calculate dynamic bottom padding. If insets.bottom is 0 (older phones), default to 20.
+  const bottomPadding = Math.max(insets.bottom, 20);
+
   return (
     <View style={styles.container}>
       <View style={styles.imageContainer}>
@@ -170,7 +170,8 @@ export default function BookingScreen() {
           </View>
       </View>
 
-      <ScrollView contentContainerStyle={{paddingBottom: 100}}>
+      {/* --- INCREASED paddingBottom to account for the taller footer --- */}
+      <ScrollView contentContainerStyle={{paddingBottom: 130}}>
         
         <View style={styles.section}>
             <Text style={styles.sectionHeader}>Select Services</Text>
@@ -244,7 +245,8 @@ export default function BookingScreen() {
 
       </ScrollView>
 
-      <View style={[styles.footer, isShopClosed && {opacity: 0.5}]}>
+      {/* --- NEW: Applied the dynamic paddingBottom here --- */}
+      <View style={[styles.footer, isShopClosed && {opacity: 0.5}, { paddingBottom: bottomPadding }]}>
         <Button 
             mode="contained" 
             onPress={confirmBooking} 
@@ -287,5 +289,15 @@ const styles = StyleSheet.create({
   slotText: { fontWeight: '600', fontSize: 13 },
   closedContainer: { alignItems: 'center', padding: 30, backgroundColor: '#FFF5F5', borderRadius: 10 },
   closedText: { color: Colors.error, fontSize: 16, fontWeight: 'bold', marginTop: 10 },
-  footer: { padding: 20, borderTopWidth: 1, borderTopColor: '#eee', position: 'absolute', bottom: 0, width: '100%', backgroundColor: 'white' },
+  // --- Adjusted footer padding since paddingBottom is handled dynamically now ---
+  footer: { 
+      paddingHorizontal: 20, 
+      paddingTop: 20, 
+      borderTopWidth: 1, 
+      borderTopColor: '#eee', 
+      position: 'absolute', 
+      bottom: 0, 
+      width: '100%', 
+      backgroundColor: 'white' 
+  },
 });

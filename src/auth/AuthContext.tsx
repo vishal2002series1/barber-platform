@@ -91,35 +91,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
     };
 
-    // // B. Handle Deep Links (Handles both PKCE Code & Implicit Tokens)
-    // const handleDeepLink = async (url: string | null) => {
-    //   if (!url) return;
-      
-    //   if (url.includes('reset-password') || url.includes('type=recovery')) {
-        
-    //     // SCENARIO 1: PKCE Flow (New Supabase Default - uses ?code=...)
-    //     const codeMatch = url.match(/code=([^&]+)/);
-    //     if (codeMatch) {
-    //         setResetPasswordMode(true); // Force Reset UI
-    //         const { error } = await supabase.auth.exchangeCodeForSession(codeMatch[1]);
-    //         if (error) Alert.alert("Link Error", error.message);
-    //         return;
-    //     }
-
-    //     // SCENARIO 2: Implicit Flow (Older - uses #access_token=...)
-    //     const accessMatch = url.match(/access_token=([^&]+)/);
-    //     const refreshMatch = url.match(/refresh_token=([^&]+)/);
-
-    //     if (accessMatch && refreshMatch) {
-    //         setResetPasswordMode(true); // Force Reset UI
-    //         const { error } = await supabase.auth.setSession({
-    //             access_token: accessMatch[1],
-    //             refresh_token: refreshMatch[1],
-    //         });
-    //         if (error) Alert.alert("Link Error", error.message);
-    //     } 
-    //   }
-    // };
+    
 
     // Listeners
     const sub = Linking.addEventListener('url', ({ url }) => handleDeepLink(url));

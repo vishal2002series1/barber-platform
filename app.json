@@ -15,8 +15,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.vishal2002series.barberplatform",
-      "googleServicesFile": "./GoogleService-Info.plist"
+      "bundleIdentifier": "com.vishal2002series.barberplatform"
     },
     "android": {
       "adaptiveIcon": {

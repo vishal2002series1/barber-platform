@@ -5,10 +5,12 @@ import { useRoute, useNavigation } from '@react-navigation/native';
 import { supabase } from '../../services/supabase';
 import { Colors } from '../../config/colors';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context'; // <--- NEW: Import safe area hook
 
 export default function BookingDetailScreen() {
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
+  const insets = useSafeAreaInsets(); // <--- NEW: Get device safe area
   const { bookingId } = route.params;
 
   const [booking, setBooking] = useState<any>(null);
@@ -47,7 +49,7 @@ export default function BookingDetailScreen() {
           price_at_booking,
           services ( name, duration_min )
         )
-      `) // <--- NEW: Added service_id so we can pass it to the edit screen
+      `)
       .eq('id', bookingId)
       .single();
 
@@ -93,16 +95,11 @@ export default function BookingDetailScreen() {
     }
   };
 
-  // --- NEW: Modify Booking Logic ---
   const handleModifyBooking = () => {
-    // Extract the exact IDs of the services the user currently has booked
     const currentServiceIds = booking.booking_services.map((bs: any) => bs.service_id);
-    
-    // Extract Date and Slot
     const currentDate = booking.slot_start.split('T')[0];
     const currentSlot = booking.slot_start;
 
-    // Navigate to Booking screen in Edit Mode
     navigation.navigate('Booking', {
         shopId: booking.shop_id,
         shopName: booking.shops?.shop_name,
@@ -155,6 +152,9 @@ export default function BookingDetailScreen() {
   const expectedTotal = booking.booking_services?.reduce((sum: number, item: any) => sum + (item.price_at_booking || 0), 0) || booking.price;
   const expectedDuration = booking.booking_services?.reduce((sum: number, item: any) => sum + (item.services?.duration_min || 0), 0) || 0;
 
+  // --- NEW: Dynamic bottom padding calculation ---
+  const scrollPaddingBottom = Math.max(insets.bottom, 20) + 30;
+
   return (
     <Provider>
     <View style={styles.container}>
@@ -164,7 +164,8 @@ export default function BookingDetailScreen() {
         <View style={{width: 40}} /> 
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
+      {/* --- NEW: Applied dynamic padding to the ScrollView --- */}
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: scrollPaddingBottom }]}>
         
         {isCancelled && (
             <Surface style={styles.cancelBanner} elevation={2}>
@@ -225,7 +226,6 @@ export default function BookingDetailScreen() {
             </>
         )}
 
-        {/* ... (Digital Receipt block remains exactly same) ... */}
         {isCompleted && receipt && (
              <Surface style={styles.receiptCard} elevation={2}>
                  <View style={{alignItems:'center', marginBottom: 15}}>
@@ -282,9 +282,8 @@ export default function BookingDetailScreen() {
             </Card.Actions>
         </Card>
 
-        {/* --- NEW: MODIFY & CANCEL ACTIONS --- */}
         {!isCompleted && !isCancelled && booking.status !== 'rejected' && (
-            <View style={{marginTop: 20, marginBottom: 50}}>
+            <View style={{marginTop: 20}}>
                 <Button 
                     mode="contained" 
                     buttonColor={Colors.primary} 
@@ -306,7 +305,6 @@ export default function BookingDetailScreen() {
         )}
       </ScrollView>
 
-      {/* ... (Modals remain exactly same) ... */}
       <Portal>
         <Modal visible={reviewModalVisible} transparent animationType="slide" onRequestClose={() => setReviewModalVisible(false)}>
             <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalOverlay}>
