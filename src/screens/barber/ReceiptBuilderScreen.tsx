@@ -4,6 +4,7 @@ import { Text, TextInput, Button, IconButton, Switch, Surface, HelperText } from
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { supabase } from '../../services/supabase';
 import { Colors } from '../../config/colors';
+import { sendPushNotification } from '../../services/notifications'; // <--- NEW: Import push notification service
 
 export default function ReceiptBuilderScreen() {
   const route = useRoute<any>();
@@ -22,7 +23,8 @@ export default function ReceiptBuilderScreen() {
   const [activeRowId, setActiveRowId] = useState<string | null>(null); 
   const [suggestions, setSuggestions] = useState<any[]>([]); 
 
-  // Customer info for WhatsApp
+  // Customer info
+  const [customerId, setCustomerId] = useState<string | null>(null); // <--- NEW: Added to track who to send notification to
   const [customerPhone, setCustomerPhone] = useState<string | null>(null);
   const [customerName, setCustomerName] = useState('Customer');
 
@@ -33,19 +35,19 @@ export default function ReceiptBuilderScreen() {
 
   const fetchBookingAndServices = async () => {
     try {
-        // A. Get Booking Info (Customer & Shop ID)
+        // A. Get Booking Info
         const { data: booking } = await supabase
           .from('bookings')
-          .select('price, shop_id, profiles:customer_id(full_name, phone)')
+          .select('price, shop_id, customer_id, profiles:customer_id(full_name, phone)') // <--- NEW: Select customer_id
           .eq('id', bookingId)
           .single();
 
         if (booking) {
+          setCustomerId(booking.customer_id); // <--- NEW: Save ID
           setCustomerPhone(booking.profiles?.phone);
           setCustomerName(booking.profiles?.full_name || 'Customer');
 
-          // B. Get Selected Services (The Fix)
-          // Join booking_services -> services to get the names
+          // B. Get Selected Services
           const { data: bookedServices } = await supabase
             .from('booking_services')
             .select(`
@@ -55,7 +57,6 @@ export default function ReceiptBuilderScreen() {
             .eq('booking_id', bookingId);
 
           if (bookedServices && bookedServices.length > 0) {
-              // Pre-fill with actual services booked
               const mappedItems = bookedServices.map((bs: any, index: number) => ({
                   id: index.toString(),
                   name: bs.services?.name || 'Service',
@@ -63,11 +64,10 @@ export default function ReceiptBuilderScreen() {
               }));
               setItems(mappedItems);
           } else {
-              // Fallback: If no specific services found (Legacy), use total price
               setItems([{ id: '1', name: 'Service', price: booking.price.toString() }]);
           }
 
-          // C. Fetch Shop Services (For Autocomplete)
+          // C. Fetch Shop Services
           if (booking.shop_id) {
             const { data: services } = await supabase
                 .from('services')
@@ -129,13 +129,11 @@ export default function ReceiptBuilderScreen() {
 
   const selectSuggestion = (item: any) => {
     if (activeRowId) {
-        // Update Name AND Price
         setItems(prev => prev.map(row => 
             row.id === activeRowId 
             ? { ...row, name: item.name, price: item.price.toString() } 
             : row
         ));
-        // Clear suggestions
         setActiveRowId(null);
         setSuggestions([]);
     }
@@ -180,6 +178,32 @@ export default function ReceiptBuilderScreen() {
     if (error) {
         Alert.alert("Error", error.message);
     } else {
+        // --- NEW: NOTIFICATION LOGIC ---
+        try {
+            if (customerId) {
+                const { data: customerProfile } = await supabase
+                    .from('profiles')
+                    .select('push_token')
+                    .eq('id', customerId)
+                    .single();
+
+                if (customerProfile && customerProfile.push_token) {
+                    await sendPushNotification(
+                        customerProfile.push_token, 
+                        "Service Completed! 🌟", 
+                        `Your total was Rs. ${finalTotal.toFixed(2)}. Tap to view your receipt and rate your experience!`,
+                        { 
+                            type: 'job_completed',
+                            bookingId: bookingId
+                        }
+                    );
+                }
+            }
+        } catch (pushError) {
+            console.log("Failed to notify customer of completion", pushError);
+        }
+        // --- END NOTIFICATION LOGIC ---
+
         Alert.alert(
             "Success",
             "Job marked as complete!",
@@ -339,12 +363,11 @@ const styles = StyleSheet.create({
   sectionHeader: { fontWeight: 'bold', marginBottom: 10, color: 'gray' },
   itemRow: { flexDirection: 'row', alignItems: 'center' },
   
-  // Suggestions
   suggestionBox: { 
       backgroundColor: '#fff', 
       borderWidth: 1, borderColor: '#eee', 
       borderRadius: 4, 
-      marginTop: 2, marginLeft: 0, marginRight: 50, // Align with text inputs
+      marginTop: 2, marginLeft: 0, marginRight: 50,
       elevation: 4, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4
   },
   suggestionItem: { 

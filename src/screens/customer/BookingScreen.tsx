@@ -5,12 +5,13 @@ import { useRoute, useNavigation } from '@react-navigation/native';
 import { supabase } from '../../services/supabase';
 import { Colors } from '../../config/colors';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context'; // <--- NEW: Import safe area hook
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { sendPushNotification } from '../../services/notifications'; // <--- NEW: Import push notification service
 
 export default function BookingScreen() {
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
-  const insets = useSafeAreaInsets(); // <--- NEW: Get device safe area dimensions
+  const insets = useSafeAreaInsets();
   
   const { shopId, shopName, editMode, bookingId, initialServices, initialDate, initialSlot } = route.params;
 
@@ -115,6 +116,31 @@ export default function BookingScreen() {
     if (submitError) {
         Alert.alert("Failed", submitError.message);
     } else {
+        // --- NEW: NOTIFICATION LOGIC ---
+        try {
+            // 1. Fetch the Barber's Push Token
+            const { data: barberProfile } = await supabase
+                .from('profiles')
+                .select('push_token')
+                .eq('id', shopDetails.owner_id)
+                .single();
+
+            // 2. Send the Push Notification (if they have a token)
+            if (barberProfile && barberProfile.push_token) {
+                const title = editMode ? "Booking Modified ✏️" : "New Booking Request! ✂️";
+                const body = `Someone just ${editMode ? 'updated their' : 'requested a'} slot for ${new Date(selectedSlot).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}. Open the app to check it!`;
+                
+                await sendPushNotification(barberProfile.push_token, title, body, {
+                    type: 'new_booking',
+                    shopId: shopId
+                });
+            }
+        } catch (pushError) {
+            console.log("Failed to send push notification to barber:", pushError);
+            // We silently fail here so the user still sees the "Success" alert even if the notification drops.
+        }
+        // --- END NOTIFICATION LOGIC ---
+
         const goHome = () => navigation.navigate('CustomerApp', { screen: 'MyBookings' });
         
         const successMsg = editMode ? "Booking updated! Barber notified." : "Booking sent to barber!";
@@ -149,7 +175,6 @@ export default function BookingScreen() {
   if (loading) return <ActivityIndicator style={{marginTop: 50}} />;
   const isShopClosed = shopDetails && !shopDetails.is_open;
 
-  // Calculate dynamic bottom padding. If insets.bottom is 0 (older phones), default to 20.
   const bottomPadding = Math.max(insets.bottom, 20);
 
   return (
@@ -170,7 +195,6 @@ export default function BookingScreen() {
           </View>
       </View>
 
-      {/* --- INCREASED paddingBottom to account for the taller footer --- */}
       <ScrollView contentContainerStyle={{paddingBottom: 130}}>
         
         <View style={styles.section}>
@@ -245,7 +269,6 @@ export default function BookingScreen() {
 
       </ScrollView>
 
-      {/* --- NEW: Applied the dynamic paddingBottom here --- */}
       <View style={[styles.footer, isShopClosed && {opacity: 0.5}, { paddingBottom: bottomPadding }]}>
         <Button 
             mode="contained" 
@@ -289,7 +312,6 @@ const styles = StyleSheet.create({
   slotText: { fontWeight: '600', fontSize: 13 },
   closedContainer: { alignItems: 'center', padding: 30, backgroundColor: '#FFF5F5', borderRadius: 10 },
   closedText: { color: Colors.error, fontSize: 16, fontWeight: 'bold', marginTop: 10 },
-  // --- Adjusted footer padding since paddingBottom is handled dynamically now ---
   footer: { 
       paddingHorizontal: 20, 
       paddingTop: 20, 

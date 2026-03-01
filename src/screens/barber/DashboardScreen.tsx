@@ -8,6 +8,7 @@ import { Strings } from '../../config/strings';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import BookingAlertModal from '../../components/BookingAlertModal'; 
+import { sendPushNotification } from '../../services/notifications'; // <--- NEW: Import push notification service
 
 export default function DashboardScreen() {
   const { userProfile, signOut } = useAuth(); 
@@ -152,6 +153,9 @@ export default function DashboardScreen() {
   };
 
   const handleBookingAction = async (bookingId: string, action: 'accept' | 'reject') => {
+    // Keep track of the target booking to know who to notify
+    const targetBooking = incomingRequest?.id === bookingId ? incomingRequest : requests.find(r => r.id === bookingId);
+    
     setModalVisible(false);
     const newStatus = action === 'accept' ? 'accepted' : 'rejected';
     setLoading(true);
@@ -161,8 +165,38 @@ export default function DashboardScreen() {
           p_booking_id: bookingId,
           p_status: newStatus
         });
+        
         setLoading(false);
-        if (error) Alert.alert("Notice", "This request is no longer valid.");
+        
+        if (error) {
+            Alert.alert("Notice", "This request is no longer valid.");
+        } else if (targetBooking) {
+            // --- NEW: NOTIFICATION LOGIC ---
+            try {
+                // Fetch the Customer's Push Token
+                const { data: customerProfile } = await supabase
+                    .from('profiles')
+                    .select('push_token')
+                    .eq('id', targetBooking.customer_id)
+                    .single();
+
+                if (customerProfile && customerProfile.push_token) {
+                    const title = action === 'accept' ? "Booking Confirmed! ✅" : "Booking Unavailable ❌";
+                    const body = action === 'accept' 
+                        ? `Your barber has accepted your request for ${formatDateTime(targetBooking.slot_start)}. See you then!`
+                        : `Sorry, your barber could not accept the request for ${formatDateTime(targetBooking.slot_start)}.`;
+
+                    await sendPushNotification(customerProfile.push_token, title, body, {
+                        type: 'booking_update',
+                        bookingId: bookingId
+                    });
+                }
+            } catch (pushError) {
+                console.log("Failed to notify customer:", pushError);
+            }
+            // --- END NOTIFICATION LOGIC ---
+        }
+        
         fetchDashboardData();
     } catch (e) {
         setLoading(false);
@@ -211,6 +245,27 @@ export default function DashboardScreen() {
       if (error) {
           Alert.alert("Error", error.message);
       } else {
+          // --- NEW: CANCEL NOTIFICATION LOGIC ---
+          try {
+              const { data: customerProfile } = await supabase
+                  .from('profiles')
+                  .select('push_token')
+                  .eq('id', selectedJob.customer_id)
+                  .single();
+
+              if (customerProfile && customerProfile.push_token) {
+                  await sendPushNotification(
+                      customerProfile.push_token, 
+                      "Appointment Cancelled ⚠️", 
+                      `Your barber had to cancel your appointment. Reason: ${cancelReason}`,
+                      { type: 'booking_cancelled' }
+                  );
+              }
+          } catch (pushError) {
+              console.log("Failed to notify customer of cancellation", pushError);
+          }
+          // --- END NOTIFICATION LOGIC ---
+
           Alert.alert("Cancelled", "Appointment has been cancelled.");
           fetchDashboardData(); 
       }
@@ -221,21 +276,17 @@ export default function DashboardScreen() {
       return job.booking_services.map((bs: any) => bs.services?.name).join(", ");
   };
 
-  // --- NEW: Smart Date Formatter ---
   const formatDateTime = (dateString: string) => {
     if (!dateString) return '';
     const date = new Date(dateString);
     const today = new Date();
     
-    // Extract the time portion (e.g., "11:00 AM")
     const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     
-    // Check if the date is today
     if (date.toDateString() === today.toDateString()) {
         return `Today, ${timeStr}`;
     }
     
-    // Otherwise, show "Feb 23, 11:00 AM"
     const dateStr = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
     return `${dateStr}, ${timeStr}`;
   };
@@ -300,7 +351,7 @@ export default function DashboardScreen() {
                             <Card.Title 
                                 title={job.profiles?.full_name || "Customer"} 
                                 titleStyle={{fontWeight: 'bold', textDecorationLine: 'underline'}}
-                                subtitle={formatDateTime(job.slot_start)} // <--- NEW: Uses Date Formatter
+                                subtitle={formatDateTime(job.slot_start)} 
                                 left={(props) => <Avatar.Icon {...props} icon="calendar-check" backgroundColor={Colors.primary} />}
                                 right={(props) => <IconButton {...props} icon="dots-vertical" onPress={() => openContactOptions(job)} />}
                             />
@@ -338,12 +389,12 @@ export default function DashboardScreen() {
             <Card key={req.id} style={styles.requestCard}>
               <Card.Title 
                 title={req.profiles?.full_name || "New Customer"} 
-                subtitle={`For: ${formatDateTime(req.slot_start)}`} // <--- NEW: Uses Date Formatter
+                subtitle={`For: ${formatDateTime(req.slot_start)}`} 
                 left={(props) => <Avatar.Icon {...props} icon="account-clock" backgroundColor={Colors.secondary} />}
               />
               <Card.Content>
                  <Text style={{fontSize: 12, color: 'gray', marginBottom: 5}}>
-                    Received: {formatDateTime(req.created_at)} {/* <--- NEW: Uses Date Formatter */}
+                    Received: {formatDateTime(req.created_at)} 
                  </Text>
                  <Text style={{fontWeight: 'bold', color: Colors.text, marginBottom: 5}}>
                     {getServiceList(req)}
