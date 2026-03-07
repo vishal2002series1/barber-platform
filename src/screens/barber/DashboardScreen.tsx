@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, StyleSheet, ScrollView, Alert, RefreshControl, TouchableOpacity, Linking } from 'react-native';
+import { View, StyleSheet, ScrollView, Alert, RefreshControl, TouchableOpacity, Linking, AppState } from 'react-native'; // <--- NEW: Import AppState
 import { Text, Card, Button, Switch, Chip, Avatar, Portal, Modal, Provider, IconButton, TextInput } from 'react-native-paper';
 import { supabase } from '../../services/supabase';
 import { useAuth } from '../../auth/AuthContext';
@@ -8,7 +8,7 @@ import { Strings } from '../../config/strings';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import BookingAlertModal from '../../components/BookingAlertModal'; 
-import { sendPushNotification } from '../../services/notifications'; // <--- NEW: Import push notification service
+import { sendPushNotification } from '../../services/notifications'; 
 
 export default function DashboardScreen() {
   const { userProfile, signOut } = useAuth(); 
@@ -49,6 +49,21 @@ export default function DashboardScreen() {
     }
   }, [userProfile]);
 
+  // --- NEW: AppState Listener for Background -> Foreground Refresh ---
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', nextAppState => {
+      if (nextAppState === 'active' && userRef.current?.id) {
+        console.log("Dashboard woke up! Refreshing data...");
+        fetchDashboardData();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+  // -----------------------------------------------------------------
+
   const fetchDashboardData = async () => {
     setLoading(true);
     
@@ -75,7 +90,7 @@ export default function DashboardScreen() {
       .order('created_at', { ascending: false });
     if (pending) setRequests(pending);
 
-    // 3. Get ACTIVE Jobs (Already fetches future bookings because of gte operator!)
+    // 3. Get ACTIVE Jobs 
     const { data: active } = await supabase
       .from('bookings')
       .select(`
@@ -101,7 +116,6 @@ export default function DashboardScreen() {
     setLoading(false);
   };
 
-  // --- REAL-TIME LISTENER ---
   const subscribeToBookings = () => {
     const channelKey = `dashboard-${userProfile!.id}-${Date.now()}`;
     const channel = supabase
@@ -146,14 +160,12 @@ export default function DashboardScreen() {
     return () => supabase.removeChannel(channel);
   };
 
-  // --- ACTIONS ---
   const toggleOnline = async (val: boolean) => {
     setIsOnline(val); 
     await supabase.from('shops').update({ is_open: val }).eq('owner_id', userProfile!.id);
   };
 
   const handleBookingAction = async (bookingId: string, action: 'accept' | 'reject') => {
-    // Keep track of the target booking to know who to notify
     const targetBooking = incomingRequest?.id === bookingId ? incomingRequest : requests.find(r => r.id === bookingId);
     
     setModalVisible(false);
@@ -171,9 +183,7 @@ export default function DashboardScreen() {
         if (error) {
             Alert.alert("Notice", "This request is no longer valid.");
         } else if (targetBooking) {
-            // --- NEW: NOTIFICATION LOGIC ---
             try {
-                // Fetch the Customer's Push Token
                 const { data: customerProfile } = await supabase
                     .from('profiles')
                     .select('push_token')
@@ -194,7 +204,6 @@ export default function DashboardScreen() {
             } catch (pushError) {
                 console.log("Failed to notify customer:", pushError);
             }
-            // --- END NOTIFICATION LOGIC ---
         }
         
         fetchDashboardData();
@@ -245,7 +254,6 @@ export default function DashboardScreen() {
       if (error) {
           Alert.alert("Error", error.message);
       } else {
-          // --- NEW: CANCEL NOTIFICATION LOGIC ---
           try {
               const { data: customerProfile } = await supabase
                   .from('profiles')
@@ -264,7 +272,6 @@ export default function DashboardScreen() {
           } catch (pushError) {
               console.log("Failed to notify customer of cancellation", pushError);
           }
-          // --- END NOTIFICATION LOGIC ---
 
           Alert.alert("Cancelled", "Appointment has been cancelled.");
           fetchDashboardData(); 

@@ -137,12 +137,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signOut = async () => {
     try {
+      // --- NEW: Remove the push token from the database BEFORE destroying the session ---
+      if (session?.user?.id) {
+         await supabase.from('profiles').update({ push_token: null }).eq('id', session.user.id);
+      }
+
       setSession(null);
       setUserProfile(null);
       setResetPasswordMode(false);
       await GoogleSignin.signOut(); 
       await supabase.auth.signOut();
-    } catch (error) { console.error(error); }
+    } catch (error) { 
+        console.error("Sign out error:", error); 
+    }
   };
 
   const signup = async (email: string, password: string, role: 'customer' | 'barber', fullName: string) => {

@@ -1,5 +1,5 @@
-import React, { useState, useCallback } from 'react';
-import { View, StyleSheet, FlatList, RefreshControl, TouchableOpacity, Image } from 'react-native';
+import React, { useState, useCallback, useEffect } from 'react';
+import { View, StyleSheet, FlatList, RefreshControl, TouchableOpacity, Image, AppState } from 'react-native'; // <--- NEW: Import AppState
 import { Text, Chip, ActivityIndicator, SegmentedButtons, Surface } from 'react-native-paper';
 import { supabase } from '../../services/supabase';
 import { useAuth } from '../../auth/AuthContext';
@@ -21,6 +21,21 @@ export default function MyBookingsScreen() {
     }, [])
   );
 
+  // --- NEW: AppState Listener for Background -> Foreground Refresh ---
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', nextAppState => {
+      if (nextAppState === 'active') {
+        console.log("App woke up! Refreshing bookings...");
+        fetchBookings();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+  // -----------------------------------------------------------------
+
   const fetchBookings = async () => {
     setLoading(true);
     const { data } = await supabase
@@ -32,7 +47,7 @@ export default function MyBookingsScreen() {
         price,
         shops ( shop_name, image_url ),
         booking_services ( services ( name ) ) 
-      `) // <--- NEW: Now fetching the services linked to the booking
+      `) 
       .eq('customer_id', userProfile?.id)
       .order('slot_start', { ascending: false }); 
 
@@ -51,7 +66,6 @@ export default function MyBookingsScreen() {
     }
   };
 
-  // --- NEW: Smart Date Formatter ---
   const formatDateTime = (dateString: string) => {
     if (!dateString) return '';
     const date = new Date(dateString);
@@ -67,13 +81,11 @@ export default function MyBookingsScreen() {
     return `${dateStr}, ${timeStr}`;
   };
 
-  // --- NEW: Service List Extractor ---
   const getServiceList = (job: any) => {
       if (!job.booking_services || job.booking_services.length === 0) return "Standard Service";
       return job.booking_services.map((bs: any) => bs.services?.name).join(", ");
   };
 
-  // --- FILTERING LOGIC ---
   const now = new Date();
   const filteredBookings = bookings.filter(b => {
     const slotTime = new Date(b.slot_start);
@@ -143,12 +155,10 @@ export default function MyBookingsScreen() {
                             </Chip>
                         </View>
                         
-                        {/* Unified Date & Time */}
                         <Text style={styles.timeText}>
                              {formatDateTime(item.slot_start)}
                         </Text>
 
-                        {/* Extracted Services */}
                         <Text style={styles.serviceText} numberOfLines={1}>
                              ✂️ {getServiceList(item)}
                         </Text>

@@ -6,7 +6,8 @@ import Constants from 'expo-constants';
 // 1. Configure how notifications appear when app is OPEN
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowAlert: true,
+    shouldShowBanner: true, // <--- UPDATED: Replaces shouldShowAlert
+    shouldShowList: true,   // <--- UPDATED: Replaces shouldShowAlert
     shouldPlaySound: true,
     shouldSetBadge: false,
   }),

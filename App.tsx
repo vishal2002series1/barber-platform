@@ -19,17 +19,15 @@ export default function App() {
     responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
       const data = response.notification.request.content.data;
       console.log("👉 User Tapped Notification! Attached Data:", data);
-      
-      // Later, we can add logic here to navigate to specific screens based on the data!
-      // e.g., if (data.bookingId) navigation.navigate('BookingDetailScreen', { id: data.bookingId })
     });
 
     return () => {
+      // --- UPDATED: Directly call .remove() on the subscription references ---
       if (notificationListener.current) {
-        Notifications.removeNotificationSubscription(notificationListener.current);
+        notificationListener.current.remove();
       }
       if (responseListener.current) {
-        Notifications.removeNotificationSubscription(responseListener.current);
+        responseListener.current.remove();
       }
     };
   }, []);
