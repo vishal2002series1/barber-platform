@@ -271,14 +271,15 @@ export default function BookingScreen() {
 
       <View style={[styles.footer, isShopClosed && {opacity: 0.5}, { paddingBottom: bottomPadding }]}>
         <Button 
-            mode="contained" 
-            onPress={confirmBooking} 
-            loading={submitting}
-            buttonColor={Colors.primary}
-            contentStyle={{height: 50}}
-            disabled={isShopClosed}
-            icon={editMode ? "content-save-edit" : undefined}
-        >
+    mode="contained" 
+    onPress={confirmBooking} 
+    loading={submitting}
+    buttonColor={Colors.primary}
+    textColor="white"
+    contentStyle={{height: 50}}
+    disabled={isShopClosed}
+    icon={editMode ? "content-save-edit" : undefined}
+>
             {isShopClosed ? "Shop is Closed" : (editMode ? "Save Changes" : "Confirm & Book")}
         </Button>
       </View>

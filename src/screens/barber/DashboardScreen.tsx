@@ -372,6 +372,7 @@ export default function DashboardScreen() {
                             <Button 
                                 mode="contained" 
                                 buttonColor={Colors.secondary} 
+                                textColor="white" 
                                 icon="check-all"
                                 style={{width: '100%'}}
                                 onPress={() => navigation.navigate('ReceiptBuilder', { bookingId: job.id })}
@@ -410,7 +411,7 @@ export default function DashboardScreen() {
               </Card.Content>
               <Card.Actions>
                 <Button textColor={Colors.error} onPress={() => handleBookingAction(req.id, 'reject')}>Reject</Button>
-                <Button mode="contained" buttonColor={Colors.success} onPress={() => handleBookingAction(req.id, 'accept')}>Accept</Button>
+                <Button mode="contained" buttonColor={Colors.success} textColor="white" onPress={() => handleBookingAction(req.id, 'accept')}>Accept</Button>
               </Card.Actions>
             </Card>
           ))
@@ -428,14 +429,14 @@ export default function DashboardScreen() {
                         {selectedJob?.profiles?.full_name}
                     </Text>
                     
-                    <Button mode="contained" icon="phone" onPress={handleCall} style={{marginBottom: 10}} buttonColor={Colors.primary}>
+                    <Button mode="contained" icon="phone" onPress={handleCall} style={{marginBottom: 10}} buttonColor={Colors.primary} textColor="white">
                         Call Customer
                     </Button>
                     <Button mode="outlined" icon="whatsapp" onPress={handleWhatsApp} textColor="#25D366" style={{borderColor: '#25D366', marginBottom: 20}}>
                         WhatsApp Message
                     </Button>
 
-                    <Button mode="contained" icon="cancel" onPress={() => setCancelMode(true)} buttonColor={Colors.error} style={{marginBottom: 10}}>
+                    <Button mode="contained" icon="cancel" onPress={() => setCancelMode(true)} buttonColor={Colors.error} textColor="white" style={{marginBottom: 10}}>
                         Cancel Appointment
                     </Button>
                     
@@ -464,12 +465,13 @@ export default function DashboardScreen() {
                     />
 
                     <Button 
-                        mode="contained" 
-                        onPress={handleConfirmCancel} 
-                        loading={cancelling}
-                        buttonColor={Colors.error}
-                        style={{marginBottom: 10}}
-                    >
+                          mode="contained" 
+                          onPress={handleConfirmCancel} 
+                          loading={cancelling}
+                          buttonColor={Colors.error}
+                          textColor="white"
+                          style={{marginBottom: 10}}
+                      >
                         Confirm Cancellation
                     </Button>
 

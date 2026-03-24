@@ -86,9 +86,9 @@ export default function LoginScreen() {
           </View>
         )}
 
-        <Button mode="contained" onPress={handleAuth} loading={loading} style={styles.mainBtn} buttonColor={Colors.primary}>
-          {loading ? "Processing..." : (isLogin ? Strings.loginBtn : "Sign Up")}
-        </Button>
+        <Button mode="contained" onPress={handleAuth} loading={loading} style={styles.mainBtn} buttonColor={Colors.primary} textColor="white">
+  {loading ? "Processing..." : (isLogin ? Strings.loginBtn : "Sign Up")}
+</Button>
 
         <View style={{flexDirection: 'row', alignItems: 'center', marginVertical: 20}}>
             <Divider style={{flex: 1}} />

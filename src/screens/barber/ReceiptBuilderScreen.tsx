@@ -336,12 +336,13 @@ export default function ReceiptBuilderScreen() {
               <Text style={styles.totalText}>Rs. {finalTotal.toFixed(2)}</Text>
           </View>
           <Button 
-            mode="contained" 
-            buttonColor={Colors.success} 
-            onPress={handleComplete}
-            loading={loading}
-            contentStyle={{paddingHorizontal: 20}}
-          >
+                mode="contained" 
+                buttonColor={Colors.success} 
+                textColor="white"
+                onPress={handleComplete}
+                loading={loading}
+                contentStyle={{paddingHorizontal: 20}}
+                >
             Complete & Send
           </Button>
       </Surface>

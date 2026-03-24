@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "523685498732-ensmstkl5uvkoq799bfreobjlj4rn929.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.vishal2002series.barberplatform",
+            "certificate_hash": "0159e95802c7c53dffa70942332e659c25ba0696"
+          }
+        },
+        {
           "client_id": "523685498732-rrd2n34vnsb9k8qbi0ffv1fb9so0gndm.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
